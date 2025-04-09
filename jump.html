@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Zone Simulator</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column; /* Stack elements vertically */
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #1a1a1d; /* Dark background */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            overflow: hidden;
+            color: #c3c3c3; /* Light grey text */
+        }
+
+        #gameCanvas {
+            border: 2px solid #4b5d67; /* Muted border color */
+            background-color: #2c3e50; /* Dark blue-grey canvas background */
+            display: block; /* Prevent extra space below */
+            margin: 10px auto; /* Center canvas */
+        }
+
+        .ui-container {
+            display: flex;
+            justify-content: space-around;
+            width: 600px; /* Match canvas width */
+            margin-bottom: 10px;
+            padding: 5px;
+            background-color: #2a363b; /* Darker UI background */
+            border-radius: 5px;
+        }
+
+        .score {
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+         #disciplineScore { color: #2ecc71; } /* Green for discipline */
+         #pnlScore { color: #e67e22; }      /* Orange for P&L */
+
+        #messageArea {
+            width: 600px;
+            height: 40px;
+            text-align: center;
+            font-size: 0.95em;
+            color: #f1c40f; /* Yellow for messages */
+            padding: 5px;
+            background-color: #2a363b;
+            border-radius: 5px;
+            margin-top: 5px;
+            line-height: 40px; /* Center text vertically */
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+         #startMessage {
+             position: absolute;
+             top: 50%;
+             left: 50%;
+             transform: translate(-50%, -50%);
+             background-color: rgba(0, 0, 0, 0.7);
+             color: white;
+             padding: 20px;
+             border-radius: 10px;
+             font-size: 1.5em;
+             text-align: center;
+             z-index: 100; /* Make sure it's on top */
+             cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Trading Zone Simulator</h1>
+
+    <div class="ui-container">
+        <div id="disciplineScore" class="score">Disciplina: 10</div>
+        <div id="pnlScore" class="score">P&L: 1000</div>
+    </div>
+
+    <canvas id="gameCanvas" width="600" height="300"></canvas>
+
+    <div id="messageArea">Premi Spazio per entrare nel trade (salta). Segui i segnali verdi!</div>
+
+    <div id="startMessage">Clicca per Iniziare</div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const messageArea = document.getElementById('messageArea');
+        const disciplineScoreDisplay = document.getElementById('disciplineScore');
+        const pnlScoreDisplay = document.getElementById('pnlScore');
+        const startMessage = document.getElementById('startMessage');
+
+        // Game Constants
+        const GRAVITY = 0.5;
+        const JUMP_FORCE = -10;
+        const PLAYER_WIDTH = 30;
+        const PLAYER_HEIGHT = 30;
+        const OBSTACLE_WIDTH = 20;
+        const SIGNAL_WIDTH = 15;
+        const SIGNAL_HEIGHT = 15;
+        const GROUND_HEIGHT = 50;
+        const INITIAL_SPEED = 3;
+        const SPEED_INCREMENT = 0.001;
+        const STARTING_DISCIPLINE = 10;
+        const STARTING_PNL = 1000;
+
+        // Game State
+        let player;
+        let obstacles = [];
+        let signals = []; // To store valid jump signals
+        let gameSpeed = INITIAL_SPEED;
+        let frameCount = 0;
+        let disciplineScore = STARTING_DISCIPLINE;
+        let pnlScore = STARTING_PNL;
+        let canJump = true;
+        let gameRunning = false;
+        let gameOver = false;
+
+        class Player {
+            constructor() {
+                this.x = 50;
+                this.y = canvas.height - GROUND_HEIGHT - PLAYER_HEIGHT;
+                this.velocityY = 0;
+                this.width = PLAYER_WIDTH;
+                this.height = PLAYER_HEIGHT;
+                this.onGround = true;
+            }
+
+            jump() {
+                if (this.onGround && canJump) {
+                    this.velocityY = JUMP_FORCE;
+                    this.onGround = false;
+                    canJump = false; // Prevent holding jump
+                    return true; // Jump successful
+                }
+                return false; // Could not jump
+            }
+
+            update() {
+                this.velocityY += GRAVITY;
+                this.y += this.velocityY;
+
+                // Ground collision
+                if (this.y >= canvas.height - GROUND_HEIGHT - this.height) {
+                    this.y = canvas.height - GROUND_HEIGHT - this.height;
+                    this.velocityY = 0;
+                    this.onGround = true;
+                    canJump = true; // Allow jump again when landed
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = '#3498db'; // Blue player
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+        }
+
+        class Obstacle {
+            constructor(height, type = 'obstacle') { // type: 'obstacle', 'signal'
+                this.x = canvas.width;
+                this.height = height;
+                 // Position obstacles on the ground
+                this.y = canvas.height - GROUND_HEIGHT - this.height;
+                this.width = OBSTACLE_WIDTH;
+                this.type = type; // 'obstacle' or 'signal' (signals are also obstacles technically)
+                this.passed = false; // For scoring discipline on missed signals
+                this.isSignal = (type === 'signal');
+            }
+
+            update() {
+                this.x -= gameSpeed;
+            }
+
+            draw() {
+                if (this.isSignal) {
+                    ctx.fillStyle = '#2ecc71'; // Green for signal
+                     // Draw as an upward triangle (arrow)
+                    ctx.beginPath();
+                    ctx.moveTo(this.x + this.width / 2, this.y);
+                    ctx.lineTo(this.x, this.y + this.height);
+                    ctx.lineTo(this.x + this.width, this.y + this.height);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                     ctx.fillStyle = '#e74c3c'; // Red for obstacle
+                     // Draw as a downward triangle
+                     ctx.beginPath();
+                     ctx.moveTo(this.x + this.width / 2, this.y + this.height);
+                     ctx.lineTo(this.x, this.y);
+                     ctx.lineTo(this.x + this.width, this.y);
+                     ctx.closePath();
+                     ctx.fill();
+                }
+            }
+        }
+
+        function spawnElement() {
+            frameCount++;
+
+            // Increase frequency over time slightly
+            let spawnThreshold = Math.max(50, 120 - Math.floor(gameSpeed * 10));
+
+            if (frameCount % spawnThreshold === 0) {
+                const randomValue = Math.random();
+                const obstacleHeight = Math.random() * (60 - 30) + 30; // Random height
+
+                 if (randomValue < 0.4) { // 40% chance of signal + obstacle
+                     // Spawn signal slightly ahead of the obstacle
+                     const signal = new Obstacle(SIGNAL_HEIGHT, 'signal');
+                     signal.x = canvas.width + 30; // Spawn slightly ahead
+                     signal.y = canvas.height - GROUND_HEIGHT - obstacleHeight - SIGNAL_HEIGHT - 10; // Position above obstacle
+                     signals.push(signal);
+                     obstacles.push(new Obstacle(obstacleHeight, 'obstacle')); // Spawn the actual obstacle
+                 } else if (randomValue < 0.85) { // 45% chance of just obstacle (no signal)
+                     obstacles.push(new Obstacle(obstacleHeight, 'obstacle'));
+                 }
+                 // 15% chance of nothing - creates gaps (FOMO/patience test)
+            }
+        }
+
+        function checkCollisions() {
+            let jumpedOnSignal = false; // Flag to check if the current jump was initiated on a signal
+
+            // Check if player is currently over a signal
+             let onSignal = false;
+             signals.forEach(signal => {
+                 if (player.x < signal.x + signal.width &&
+                     player.x + player.width > signal.x &&
+                     player.y < signal.y + signal.height && // Check Y axis for vertical position
+                     player.height + player.y > signal.y) {
+                        onSignal = true;
+                 }
+             });
+
+
+             // Player attempts jump
+             if (spacePressed) {
+                 const jumpSuccess = player.jump();
+                 if (jumpSuccess) {
+                    if (onSignal) {
+                         // Correct jump on signal
+                         disciplineScore++;
+                         showMessage("Azione disciplinata sul segnale!", "#2ecc71");
+                         jumpedOnSignal = true;
+                         // Consume the signal visually or mark it used? For now, score is enough.
+                         // Remove or mark the signal that triggered the jump
+                         signals = signals.filter(signal => !(
+                             player.x < signal.x + signal.width &&
+                             player.x + player.width > signal.x &&
+                             player.y + player.height > signal.y // Simple check if player is near signal
+                         ));
+                     } else {
+                         // Impulsive jump (no signal)
+                         disciplineScore -= 2; // Harsher penalty
+                         pnlScore -= 50; // Penalty for impulsive trade
+                         showMessage("Salto impulsivo! Il mercato punisce l'emotività.", "#e74c3c");
+                     }
+                 }
+                 spacePressed = false; // Reset press state
+             }
+
+
+             // Check missed signals
+             signals.forEach(signal => {
+                 if (!signal.passed && signal.x + signal.width < player.x) {
+                     if (!signal.jumpedOn) { // Check if this signal was used for a jump
+                         disciplineScore--;
+                         pnlScore -= 20; // Penalty for hesitation/missed opportunity
+                         showMessage("Segnale mancato! L'esitazione costa.", "#f39c12");
+                         signal.passed = true; // Mark as passed to avoid multiple penalties
+                     }
+                 }
+             });
+
+
+             // Check obstacle collisions
+             obstacles.forEach(obstacle => {
+                if (
+                    player.x < obstacle.x + obstacle.width &&
+                    player.x + player.width > obstacle.x &&
+                    player.y < obstacle.y + obstacle.height &&
+                    player.y + player.height > obstacle.y
+                ) {
+                    // Collision occurred
+                    if (jumpedOnSignal) {
+                         // Hit despite jumping on signal (probabilistic loss)
+                         pnlScore -= 25; // Smaller P&L loss, represents cost of doing business
+                         showMessage("Setup valido fallito. Accetta la perdita.", "#e67e22");
+                         // NO discipline penalty here - this is key!
+                     } else {
+                          // Hit due to bad jump or no jump
+                          disciplineScore--;
+                          pnlScore -= 75; // Larger P&L loss
+                          showMessage("Errore! Colpito ostacolo per indisciplina.", "#e74c3c");
+                     }
+                    // Remove the obstacle that was hit
+                    obstacles = obstacles.filter(o => o !== obstacle);
+                }
+            });
+
+        }
+
+        function updateGame() {
+            if (!gameRunning || gameOver) return;
+
+            gameSpeed += SPEED_INCREMENT;
+            player.update();
+            spawnElement();
+
+            // Update and remove off-screen elements
+            obstacles.forEach(o => o.update());
+            obstacles = obstacles.filter(o => o.x + o.width > 0);
+            signals.forEach(s => s.update());
+            signals = signals.filter(s => s.x + s.width > 0);
+
+
+            checkCollisions(); // Handle jumps, scoring, and collisions
+
+
+            // Update UI
+            disciplineScoreDisplay.textContent = `Disciplina: ${disciplineScore}`;
+            pnlScoreDisplay.textContent = `P&L: ${pnlScore}`;
+
+            // Game Over conditions
+            if (disciplineScore <= 0 || pnlScore <= 0) {
+                gameOver = true;
+                gameRunning = false;
+                 messageArea.textContent = `GAME OVER! Punteggio Disciplina: ${disciplineScore}. Ricarica per riprovare.`;
+                 messageArea.style.color = "#e74c3c";
+            }
+        }
+
+
+        function drawGame() {
+            // Clear canvas
+            ctx.fillStyle = '#2c3e50'; // Background color
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Ground
+            ctx.fillStyle = '#34495e'; // Darker ground
+            ctx.fillRect(0, canvas.height - GROUND_HEIGHT, canvas.width, GROUND_HEIGHT);
+
+            player.draw();
+            obstacles.forEach(o => o.draw());
+            signals.forEach(s => s.draw()); // Draw signals
+
+            if (gameRunning) {
+                requestAnimationFrame(drawGame);
+                 updateGame(); // Update game logic after drawing
+             } else if (gameOver) {
+                 // Optional: Draw Game Over text on canvas
+                 ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+                 ctx.fillRect(0, 0, canvas.width, canvas.height);
+                 ctx.fillStyle = "#e74c3c";
+                 ctx.font = "40px 'Segoe UI'";
+                 ctx.textAlign = "center";
+                 ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20);
+                  ctx.font = "20px 'Segoe UI'";
+                  ctx.fillText(`Disciplina: ${disciplineScore} | P&L: ${pnlScore}`, canvas.width / 2, canvas.height / 2 + 20);
+                  ctx.font = "16px 'Segoe UI'";
+                  ctx.fillText("Ricarica la pagina per riprovare", canvas.width / 2, canvas.height / 2 + 50);
+            }
+        }
+
+        let spacePressed = false;
+        function handleInput(e) {
+            if (e.code === 'Space' && gameRunning && !gameOver) {
+                 spacePressed = true; // Set flag to be checked in update loop
+                 e.preventDefault(); // Prevent page scrolling
+            }
+        }
+
+        function handleTouch() {
+            if (gameRunning && !gameOver) {
+                 spacePressed = true;
+             }
+         }
+
+
+        let messageTimeout;
+        function showMessage(msg, color = "#f1c40f") {
+             clearTimeout(messageTimeout); // Clear previous timeout if any
+             messageArea.textContent = msg;
+             messageArea.style.color = color;
+             // Clear message after a few seconds
+             messageTimeout = setTimeout(() => {
+                 if (!gameOver) { // Don't clear if game over message is showing
+                     messageArea.textContent = "";
+                 }
+            }, 3000);
+        }
+
+        function startGame() {
+            if (gameRunning) return; // Prevent restarting if already running
+
+            // Reset game state
+            player = new Player();
+            obstacles = [];
+            signals = [];
+            gameSpeed = INITIAL_SPEED;
+            frameCount = 0;
+            disciplineScore = STARTING_DISCIPLINE;
+            pnlScore = STARTING_PNL;
+            canJump = true;
+            gameOver = false;
+            gameRunning = true;
+            spacePressed = false;
+
+            disciplineScoreDisplay.textContent = `Disciplina: ${disciplineScore}`;
+            pnlScoreDisplay.textContent = `P&L: ${pnlScore}`;
+            messageArea.textContent = "Segui i segnali verdi! Premi Spazio per saltare.";
+            messageArea.style.color = "#f1c40f";
+            startMessage.style.display = 'none'; // Hide start message
+
+            // Start the game loop
+            drawGame();
+        }
+
+         // Event Listeners
+         window.addEventListener('keydown', handleInput);
+         canvas.addEventListener('touchstart', handleTouch); // Basic touch support
+         startMessage.addEventListener('click', startGame);
+
+
+        // Initial setup - Draw initial state but don't start loop yet
+        player = new Player(); // Create player instance for initial draw
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#34495e';
+        ctx.fillRect(0, canvas.height - GROUND_HEIGHT, canvas.width, GROUND_HEIGHT);
+        player.draw();
+
+
+    </script>
+</body>
+</html>
