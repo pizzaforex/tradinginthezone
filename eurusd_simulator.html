@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Trader's Mind Simulator v4 - Continuous</title>
+    <style>
+        /* --- Stili CSS (Identici a V3 Professional) --- */
+        :root{--bg-dark:#1c1c1e;--bg-medium:#2c2c2e;--border-color:#4a4a4e;--text-primary:#e4e6eb;--text-secondary:#b0b3b8;--accent-blue:#0a84ff;--accent-green:#30d158;--accent-red:#ff453a;--accent-yellow:#ffd60a;--chart-bg:#161618;--candle-wick:#98989d;}
+        html{box-sizing:border-box;}*,*:before,*:after{box-sizing:inherit;}
+        body{display:flex;flex-direction:column;align-items:center;min-height:100vh;background-color:var(--bg-dark);font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;margin:0;padding:10px;color:var(--text-primary);font-size:13px;}
+        h1,h2,h3,h4{color:var(--text-primary);margin-top:0;margin-bottom:.6em;text-align:center;font-weight:600;}
+        h3{font-size:1.1em;} h4{font-size:1em;color:var(--text-secondary);margin-bottom:.5em;text-align:left;}
+        button{padding:7px 14px;border:1px solid var(--border-color);border-radius:6px;background-color:var(--bg-medium);color:var(--text-primary);cursor:pointer;transition:background-color .2s ease, border-color .2s ease;margin:3px;font-size:.95em;font-weight:500;}
+        button:hover:not(:disabled){background-color:var(--border-color);border-color:#5a5a5e;}
+        button:disabled{opacity:.4;cursor:not-allowed;}
+        button.buy{background-color:var(--accent-green);border-color:#4cd964;color:#fff;} button.buy:hover:not(:disabled){background-color:#30d158;}
+        button.sell{background-color:var(--accent-red);border-color:#ff5f56;color:#fff;} button.sell:hover:not(:disabled){background-color:#ff453a;}
+        button.action{background-color:var(--accent-blue);border-color:#0a84ff;color:#fff;} button.action:hover:not(:disabled){background-color:#007aff;}
+        input[type=number],input[type=text]{background-color:var(--bg-medium);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 7px;border-radius:4px;width:70px;margin-left:5px;font-size:.9em;text-align:right;}
+        label{font-size:.9em;color:var(--text-secondary);}
+        .ui-container{display:flex;justify-content:space-around;align-items:center;width:100%;max-width:900px;padding:12px 18px;background-color:var(--bg-medium);border:1px solid var(--border-color);border-radius:8px;margin-bottom:10px;}
+        .score{font-size:1.2em;font-weight:600;} #capitalDisplay{color:var(--accent-yellow);} #disciplineDisplay{color:var(--accent-blue);}
+        #game-area{display:grid;grid-template-columns:1.3fr .7fr;grid-template-rows:auto auto auto;grid-template-areas:"desk strategy" "desk hq" "journal journal";gap:12px;width:100%;max-width:900px;background-color:var(--bg-medium);padding:12px;border:1px solid var(--border-color);border-radius:8px;}
+        .panel{background-color:var(--bg-dark);border:1px solid var(--border-color);border-radius:6px;padding:15px;min-height:100px;display:flex;flex-direction:column;}
+        .panel h3{margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--border-color);}
+        #trading-desk{grid-area:desk;} #strategy-room{grid-area:strategy;} #headquarters{grid-area:hq;} #trading-journal{grid-area:journal;max-height:180px;overflow-y:auto;}
+        #chartContainer{position:relative;width:100%;height:280px;margin-bottom:12px;flex-grow:1;} /* Increased height */
+        #marketCanvas{position:absolute;top:0;left:0;width:100%;height:100%;background-color:var(--chart-bg);border-radius:4px;}
+        #volumeCanvas{position:absolute;bottom:0;left:0;width:100%;height:60px;background-color:transparent;pointer-events:none;}
+        #chartOverlays{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+        #desk-info{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;margin-bottom:10px;font-size:.95em;padding-bottom:5px;border-bottom:1px dashed var(--border-color);gap:5px;}
+        #signalDisplay{font-weight:700;padding:3px 6px;border-radius:4px;font-size:1em;} /* Bolder signal */
+        #signalDisplay.BUY{background-color:var(--accent-green);color:white;} #signalDisplay.SELL{background-color:var(--accent-red);color:white;} #signalDisplay.NONE,#signalDisplay.INATTIVA{color:var(--text-secondary);background-color:transparent;}
+        #news-ticker{font-size:.85em;color:var(--text-secondary);height:20px;overflow:hidden;white-space:nowrap;margin-top:10px;}
+        #execution-pad{margin-top:10px;border-top:1px solid var(--border-color);padding-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;}
+        #execution-pad label,#execution-pad span{margin-right:5px;}
+        #portfolio-monitor{margin-top:10px;border-top:1px solid var(--border-color);padding-top:10px;font-size:.9em;}
+        #portfolio-monitor ul{list-style:none;padding:0;margin:8px 0;} #portfolio-monitor li{margin-bottom:5px;background-color:var(--bg-medium);padding:5px 8px;border-radius:4px;font-size:.95em;border-left:3px solid transparent;}
+        #portfolio-monitor li.buy{border-left-color:var(--accent-green);} #portfolio-monitor li.sell{border-left-color:var(--accent-red);}
+        #portfolio-monitor strong{font-weight:600;} #openPnlDisplay{margin-top:5px;font-weight:700;} /* Bolder PnL */
+        #rules-display{font-size:.9em;} #rules-display p{margin:5px 0;color:var(--text-secondary);} #rules-display strong{color:var(--accent-blue);font-weight:600;}
+        #mental-state{font-weight:700;margin:5px 0 15px 0;text-align:center;padding:6px;border-radius:4px;font-size:1.1em;} /* Bolder state */
+        #psych-challenge{text-align:center;font-size:.95em;flex-grow:1;display:flex;flex-direction:column;justify-content:center;}
+        #psych-challenge p{margin-bottom:10px;} #psych-challenge button{font-size:.9em;padding:6px 12px;}
+        #trading-journal ul{list-style:none;padding:0;margin:0;font-size:.85em;} #trading-journal li{padding:5px 3px;border-bottom:1px dotted var(--border-color);opacity:.95;} #trading-journal li:last-child{border-bottom:none;}
+        .log-ok{color:#4cd964;} .log-warn{color:var(--accent-yellow);} .log-error{color:#ff5f56;} .log-info{color:var(--accent-blue);}
+        #gameControl{margin-top:15px;text-align:center;}
+    </style>
+</head>
+<body>
+
+    <h1>EURUSD Mind Simulator</h1>
+    <div class="ui-container">
+        <div id="capitalDisplay" class="score">Capitale: $---.--</div>
+        <div id="disciplineDisplay" class="score">Disciplina: --</div>
+    </div>
+
+    <div id="game-area">
+        <!-- Trading Desk -->
+        <div id="trading-desk" class="panel">
+            <h3>Trading Desk: EURUSD</h3>
+             <div id="chartContainer">
+                 <!-- Canvas dimensions set dynamically -->
+                <canvas id="marketCanvas"></canvas>
+                <canvas id="volumeCanvas"></canvas>
+                <canvas id="chartOverlays"></canvas>
+             </div>
+            <div id="desk-info">
+                 <span id="currentPriceDisplay">Prezzo: -.-----</span>
+                 <span id="maDisplay">SMA(20): -.-----</span>
+                 <span id="signalDisplay" class="INATTIVA">Segnale: INATTIVA</span>
+             </div>
+            <div id="news-ticker">News: ---</div>
+            <div id="execution-pad">
+                <label for="tradeSize">Size:</label>
+                <input type="number" id="tradeSize" value="10000" min="1000" step="1000" disabled>
+                <label for="stopLossPercent">Stop Loss (%):</label>
+                <input type="number" id="stopLossPercent" value="0.10" min="0.05" max="1.0" step="0.01" disabled>
+                <button id="buyButton" class="buy" disabled>BUY</button>
+                <button id="sellButton" class="sell" disabled>SELL</button>
+            </div>
+            <div id="portfolio-monitor">
+                <h4>Posizione Aperta</h4>
+                <ul id="positionsList"><li>Sessione non attiva.</li></ul>
+                <div id="openPnlDisplay">P&L Aperto: $0.00</div>
+                <button id="closePositionButton" disabled>Chiudi Manualmente</button>
+            </div>
+        </div>
+
+        <!-- Strategy Room -->
+        <div id="strategy-room" class="panel">
+            <h3>Strategy Room</h3>
+            <div id="rules-display">
+                 <h4>Strategia Attiva: SMA(20) Crossover</h4>
+                 <p><strong>Asset:</strong> EURUSD</p>
+                 <p><strong>Timeframe:</strong> Simulato (~1 Min)</p>
+                 <p><strong>Entrata Long:</strong> Chiusura > SMA(20) & Prec. <= SMA(20)</p>
+                 <p><strong>Entrata Short:</strong> Chiusura < SMA(20) & Prec. >= SMA(20)</p>
+                 <p><strong>Stop Loss:</strong> % da entrata (Input)</p>
+                 <p><strong>Take Profit:</strong> 2 x Distanza SL</p>
+                 <p><strong>Risk:</strong> Max 2% Capitale per Trade</p>
+            </div>
+        </div>
+
+        <!-- Headquarters (Mind) -->
+        <div id="headquarters" class="panel">
+            <h3>Headquarters (Mente)</h3>
+            <div id="mental-state">Stato Mentale: In Attesa</div>
+            <div id="psych-challenge">
+                <p>Clicca "Inizia Sessione" per abilitare il trading.</p>
+            </div>
+        </div>
+
+        <!-- Trading Journal -->
+        <div id="trading-journal" class="panel">
+            <h3>Trading Journal</h3>
+            <ul id="journalList"></ul>
+        </div>
+    </div>
+
+    <div id="gameControl">
+         <button id="startStopButton" class="action">Inizia Sessione Trading</button>
+     </div>
+
+    <script>
+        // --- Cache Elementi DOM ---
+        const ui = { /* Cache UI elements */ };
+        const elementIds = ['capitalDisplay', 'disciplineDisplay', 'marketCanvas', 'volumeCanvas', 'chartOverlays', 'currentPriceDisplay', 'maDisplay', 'signalDisplay', 'newsTicker', 'tradeSizeInput', 'stopLossPercentInput', 'buyButton', 'sellButton', 'positionsList', 'openPnlDisplay', 'closePositionButton', 'mentalStateDisplay', 'psychChallengeDiv', 'journalList', 'startStopButton', 'chartContainer']; // Include chartContainer
+        elementIds.forEach(id => { ui[id] = document.getElementById(id); });
+        ui.priceCtx = ui.marketCanvas?.getContext('2d'); // Use optional chaining for safety
+        ui.volumeCtx = ui.volumeCanvas?.getContext('2d');
+        ui.overlayCtx = ui.chartOverlays?.getContext('2d');
+
+        // --- Costanti ---
+        // ... (stesse costanti di V3 Professional, ma STARTING_PRICE=1.08500, VOLATILITY_FACTOR=0.0006) ...
+        const INITIAL_CAPITAL = 10000; const INITIAL_DISCIPLINE = 10; const MAX_DISCIPLINE = 20;
+        const TAKE_PROFIT_MULTIPLIER = 2; const MA_PERIOD = 20; const MAX_RISK_PER_TRADE_PERCENT = 2;
+        const CHART_CANDLES_DISPLAYED = 70; const HISTORY_BUFFER = MA_PERIOD + 5;
+        const NEWS_CHANCE = 0.08; const PSYCH_CHALLENGE_THRESHOLD = 2;
+        const STARTING_PRICE = 1.08500; const PIP_VALUE = 0.0001; const VOLATILITY_FACTOR = 0.0006;
+
+
+        // --- Stato Globale ---
+        let state = {}; // Definita in resetStateForSession
+        let marketState = { // Stato separato per il mercato che gira sempre
+             candleHistory: [],
+             currentPrice: STARTING_PRICE,
+             movingAverage: 0,
+             lastNews: "Caricamento Mercato EURUSD...",
+             tickCount: 0,
+             animationFrameId: null
+        };
+
+        // --- Stato Grafico ---
+        let chartState = { minPrice: 0, maxPrice: 0, finalPriceRange: 1, maxVolume: 1, candleTotalWidth: 1, candleBodyWidth: 1, candleSpacing: 1 };
+        let chartMargin = { top: 15, right: 60, bottom: 25, left: 10 };
+        let priceChartHeight = 0; let volumeHeight = 0; let volumeMargin = { top: 0, right: 60, bottom: 10, left: 10 };
+        let chartWidth = 0;
+
+
+        // --- Funzioni ---
+
+        // Reset solo per la sessione di trading
+        function resetStateForSession() {
+             state = {
+                 capital: INITIAL_CAPITAL, discipline: INITIAL_DISCIPLINE,
+                 openPosition: null, tradingSessionActive: false, gameOver: false,
+                 lastSignal: 'NONE', // Signal detected by market, used by session
+                 mentalState: 'In Attesa', lastDisciplineChange: 0
+             };
+             ui.journalList.innerHTML = ""; // Clear journal
+             ui.psychChallengeDiv.innerHTML = ""; // Clear challenge area
+             ui.positionsList.innerHTML = '<li>Sessione non attiva.</li>'; // Reset portfolio display
+             addJournalEntry("Pronto per iniziare la sessione.", "log-info");
+        }
+
+
+        function calculateMovingAverage(historySlice) { /* ... identica ... */
+             if (!historySlice || historySlice.length < MA_PERIOD) return null;
+             const relevantHistory = historySlice.slice(-MA_PERIOD);
+             const sum = relevantHistory.reduce((acc, candle) => acc + candle.c, 0);
+             return sum / MA_PERIOD;
+         }
+
+
+        function simulateMarketTick(initializing = false) {
+             marketState.tickCount++; // Increment global tick count
+             const openPrice = marketState.candleHistory.length > 0 ? marketState.candleHistory[marketState.candleHistory.length - 1].c : marketState.currentPrice;
+             let highPrice = openPrice; let lowPrice = openPrice;
+             const numFluctuations = 4 + Math.floor(Math.random() * 4);
+             let price = openPrice;
+             const momentum = marketState.candleHistory.length > 1 ? Math.sign(marketState.candleHistory[marketState.candleHistory.length - 1].c - marketState.candleHistory[marketState.candleHistory.length - 2].c) * 0.15 : 0; // Stronger momentum
+             for (let i = 0; i < numFluctuations; i++) {
+                 const randomFactor = Math.random() - 0.5 + momentum;
+                 const change = randomFactor * VOLATILITY_FACTOR * (1 + Math.random() * 0.5); // Add random volatility burst
+                 price += change;
+                 if (marketState.movingAverage > 0) { price += (marketState.movingAverage - price) * 0.02; } // Mean reversion
+                 highPrice = Math.max(highPrice, price); lowPrice = Math.min(lowPrice, price);
+             }
+             const closePrice = Math.max(PIP_VALUE * 10, price); // Min price slightly above zero
+             const volume = Math.floor(Math.random() * 15000) + 5000;
+             const prevMA = marketState.movingAverage; // Store previous MA
+             const currentMA = calculateMovingAverage([...marketState.candleHistory, {c: closePrice}]); // Calculate potential new MA
+             const newCandle = { o: openPrice, h: highPrice, l: lowPrice, c: closePrice, volume: volume, ma: currentMA, prev_ma: prevMA };
+
+             marketState.candleHistory.push(newCandle);
+             while (marketState.candleHistory.length > CHART_CANDLES_DISPLAYED + HISTORY_BUFFER) {
+                 marketState.candleHistory.shift();
+             }
+             marketState.currentPrice = closePrice;
+             marketState.movingAverage = currentMA !== null ? currentMA : 0;
+
+             // --- News Simulation ---
+             if (Math.random() < NEWS_CHANCE) {
+                 const randomIndex = Math.floor(Math.random() * newsItems.length);
+                 marketState.lastNews = newsItems[randomIndex];
+             }
+
+             // --- Signal Detection (Always runs to update display) ---
+             let currentSignal = detectSignal();
+             state.lastSignal = currentSignal; // Update session state signal
+
+             // --- Trading Session Logic (Only if active) ---
+             if (state.tradingSessionActive && !state.gameOver) {
+                 state.lastDisciplineChange = 0; // Reset discipline change for the tick
+                 checkOpenPosition();
+                 updateMentalStateDisplays(); // Update mental state based on PnL etc.
+
+                 // Check Psych Challenge Trigger (moved from checkPosition to avoid triggering on auto-close)
+                 // Example: Trigger after a closed trade resulted in significant discipline change
+                 // This logic needs refinement based on when challenges should appear
+
+                 // Check Game Over conditions for the session
+                 if (state.discipline <= 0) {
+                     addJournalEntry("Disciplina esaurita! Sessione terminata.", "log-error");
+                     stopTradingSession(true); // Stop session, mark as game over
+                 } else if (state.capital <= 0) {
+                     addJournalEntry("Capitale esaurito! Sessione terminata.", "log-error");
+                     stopTradingSession(true); // Stop session, mark as game over
+                 }
+             }
+
+        }
+
+         function detectSignal() { // Renamed from checkSignal, only detects
+             if (marketState.candleHistory.length < MA_PERIOD + 1 || marketState.movingAverage === 0) return 'NONE';
+             const currentCandle = marketState.candleHistory[marketState.candleHistory.length - 1];
+             const prevCandle = marketState.candleHistory[marketState.candleHistory.length - 2];
+             if (prevCandle.ma === null || currentCandle.ma === null) return 'NONE';
+             let signal = 'NONE';
+             if (prevCandle.c <= prevCandle.ma && currentCandle.c > currentCandle.ma) signal = 'BUY';
+             else if (prevCandle.c >= prevCandle.ma && currentCandle.c < currentCandle.ma) signal = 'SELL';
+             return signal;
+         }
+
+
+        function updateDisplays() {
+             if (!ui.capitalDisplay) return; // Ensure UI elements exist
+             // Always display market info
+             ui.currentPriceDisplay.textContent = `EURUSD: ${marketState.currentPrice.toFixed(5)}`;
+             ui.maDisplay.textContent = `SMA(${MA_PERIOD}): ${marketState.movingAverage > 0 ? marketState.movingAverage.toFixed(5) : 'Calc...'}`;
+             ui.newsTicker.textContent = `News: ${marketState.lastNews}`;
+              updateSignalDisplay(state.tradingSessionActive ? state.lastSignal : 'INATTIVA'); // Show signal only if session active
+
+
+             // Display session info only if active or just ended
+             if (state.tradingSessionActive || state.gameOver) {
+                ui.capitalDisplay.textContent = `Capitale: $${state.capital.toFixed(2)}`;
+                ui.disciplineDisplay.textContent = `Disciplina: ${state.discipline}`;
+                ui.mentalStateDisplay.textContent = `Stato Mentale: ${state.mentalState}`;
+                ui.mentalStateDisplay.style.color = getMentalStateColor();
+                 // Update Portfolio
+                 if (state.openPosition) {
+                     const pnl = (marketState.currentPrice - state.openPosition.entryPrice) * state.openPosition.size * (state.openPosition.type === 'BUY' ? 1 : -1);
+                     ui.openPnlDisplay.textContent = `P&L Aperto: $${pnl.toFixed(2)}`;
+                     ui.openPnlDisplay.style.color = pnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+                     const posLi = document.getElementById('pos-item');
+                     if(posLi) { /* ... update li content ... */
+                         posLi.innerHTML = `
+                         ${state.openPosition.type} ${state.openPosition.size.toLocaleString()} @ ${state.openPosition.entryPrice.toFixed(5)} |
+                         SL: ${state.openPosition.stopLossPrice.toFixed(5)} | TP: ${state.openPosition.takeProfitPrice.toFixed(5)} |
+                         <strong style="color:${pnl>=0?'var(--accent-green)':'var(--accent-red)'}">PnL: $${pnl.toFixed(2)}</strong> | Risc: $${state.openPosition.riskAmount.toFixed(2)}`;
+                     }
+                     ui.closePositionButton.disabled = !state.tradingSessionActive || state.mentalState === 'Tilt';
+                 } else {
+                     ui.openPnlDisplay.textContent = `P&L Aperto: $0.00`;
+                     ui.openPnlDisplay.style.color = 'var(--text-primary)';
+                     ui.positionsList.innerHTML = '<li>Nessuna posizione aperta.</li>';
+                     ui.closePositionButton.disabled = true;
+                 }
+                 // Button States during active session
+                 enableTradeButtons(!state.openPosition && state.lastSignal !== 'NONE'); // Enable only if signal and no pos
+
+             } else { // Session not active display defaults
+                 ui.capitalDisplay.textContent = `Capitale: $---.--`;
+                 ui.disciplineDisplay.textContent = `Disciplina: --`;
+                 ui.mentalStateDisplay.textContent = `Stato Mentale: In Attesa`;
+                 ui.mentalStateDisplay.style.color = getMentalStateColor();
+                 ui.positionsList.innerHTML = '<li>Sessione non attiva.</li>';
+                 ui.openPnlDisplay.textContent = `P&L Aperto: $0.00`;
+                 enableTradeButtons(false); // Disable all trade buttons
+                 ui.closePositionButton.disabled = true;
+             }
+             // Tilt override
+              if(state.mentalState === 'Tilt') {
+                  enableTradeButtons(false);
+                  ui.closePositionButton.disabled = true;
+              }
+        }
+
+        // ... (getMentalStateColor, updateSignalDisplay, enableTradeButtons - ASSICURATI DI ADATTARLE) ...
+         function getMentalStateColor() { /* ... same ... */
+              switch(state.mentalState){
+                  case 'Euforico': return 'var(--accent-green)'; case 'Ansioso': return 'var(--accent-yellow)';
+                  case 'Tilt': case 'Pauroso': return 'var(--accent-red)'; case 'Calmo': default: return 'var(--accent-blue)';
+                  case 'In Attesa': case 'Sessione Finita': return 'var(--text-secondary)';
+              }
+          }
+         function updateSignalDisplay(signal) { /* ... same using ui.signalDisplay ... */
+              ui.signalDisplay.textContent = `Segnale: ${signal}`; ui.signalDisplay.className = signal;
+          }
+         function enableTradeButtons(enable) { /* ... same using ui.buyButton, ui.sellButton ... */
+              const allowTrade = enable && state.tradingSessionActive && state.mentalState !== 'Tilt';
+              ui.buyButton.disabled = !allowTrade || state.lastSignal !== 'BUY';
+              ui.sellButton.disabled = !allowTrade || state.lastSignal !== 'SELL';
+          }
+
+
+        function executeTrade(type) { /* ... Stessa logica di V3 ma usando state. e ui. */
+             if (state.openPosition || !state.tradingSessionActive || state.mentalState === 'Tilt') return;
+             const isSignalValid = (type === 'BUY' && state.lastSignal === 'BUY') || (type === 'SELL' && state.lastSignal === 'SELL');
+             let disciplineChange = 0; let journalMsg = ""; let logType = "log-info";
+             const size = parseInt(ui.tradeSizeInput.value); const slPercent = parseFloat(ui.stopLossPercentInput.value) / 100;
+             if (isNaN(size) || size <= 0 || isNaN(slPercent) || slPercent <= 0) { addJournalEntry("Errore: Size/SL%", "log-error"); return; }
+             const slDistance = marketState.currentPrice * slPercent; const riskAmount = slDistance * size; const maxAllowedRisk = state.capital * (MAX_RISK_PER_TRADE_PERCENT / 100);
+             if (riskAmount <= 0) { addJournalEntry("Errore: Rischio calcolato non valido.", "log-error"); return; } // Added check for zero/neg risk
+             if (riskAmount > maxAllowedRisk) { addJournalEntry(`Errore: Rischio ($${riskAmount.toFixed(2)}) > Max ($${maxAllowedRisk.toFixed(2)})`, "log-error"); updateMentalStateOnError(); return; }
+             if (state.capital < riskAmount) { addJournalEntry(`Errore: Capitale insuff. ($${state.capital.toFixed(2)}) per Rischio ($${riskAmount.toFixed(2)})`, "log-error"); return; }
+             if (!isSignalValid) { disciplineChange = -2; journalMsg = `Trade ${type} IMPULSIVO! (-2 Dis.)`; logType = "log-error"; updateMentalStateOnError(); }
+             else { disciplineChange = 1; journalMsg = `Segnale ${type} OK (+1 Dis.). Rischio $${riskAmount.toFixed(2)}`; logType = "log-ok"; }
+             state.discipline = Math.min(MAX_DISCIPLINE, Math.max(0, state.discipline + disciplineChange)); addJournalEntry(journalMsg, logType); state.lastDisciplineChange += Math.abs(disciplineChange);
+             const tpDistance = slDistance * TAKE_PROFIT_MULTIPLIER;
+             const stopLossPrice = type === 'BUY' ? marketState.currentPrice - slDistance : marketState.currentPrice + slDistance;
+             const takeProfitPrice = type === 'BUY' ? marketState.currentPrice + tpDistance : marketState.currentPrice - tpDistance;
+             state.openPosition = { type: type, entryPrice: marketState.currentPrice, size: size, stopLossPrice: stopLossPrice, takeProfitPrice: takeProfitPrice, riskAmount: riskAmount };
+             ui.positionsList.innerHTML = `<li id="pos-item" class="${type.toLowerCase()}">Apertura...</li>`;
+             enableTradeButtons(false); updateSignalDisplay('NONE'); // Clear signal display, but keep market state signal
+             updateDisplays(); drawChartOverlays();
+          }
+
+
+        function checkOpenPosition() { /* ... Stessa logica usando state., marketState.candleHistory ... */
+             if (!state.openPosition || !state.tradingSessionActive) return;
+             const currentCandle = marketState.candleHistory[marketState.candleHistory.length - 1];
+             if(!currentCandle) return; // Safety check
+             let exitPrice = null; let closeReason = ""; let disciplinePenalty = 0;
+             if (state.openPosition.type === 'BUY') {
+                 if (currentCandle.l <= state.openPosition.stopLossPrice) { exitPrice = state.openPosition.stopLossPrice; closeReason = "Stop Loss"; }
+                 else if (currentCandle.h >= state.openPosition.takeProfitPrice) { exitPrice = state.openPosition.takeProfitPrice; closeReason = "Take Profit"; }
+             } else { // SELL
+                 if (currentCandle.h >= state.openPosition.stopLossPrice) { exitPrice = state.openPosition.stopLossPrice; closeReason = "Stop Loss"; }
+                 else if (currentCandle.l <= state.openPosition.takeProfitPrice) { exitPrice = state.openPosition.takeProfitPrice; closeReason = "Take Profit"; }
+             }
+             if (exitPrice !== null) closePosition(exitPrice, closeReason, disciplinePenalty);
+         }
+
+
+        function closePosition(exitPrice, reason, disciplinePenalty = 0, manual=false) { /* ... Stessa logica usando state. */
+             if (!state.openPosition) return;
+             const pnl = (exitPrice - state.openPosition.entryPrice) * state.openPosition.size * (state.openPosition.type === 'BUY' ? 1 : -1);
+             const prevCapital = state.capital; state.capital += pnl;
+             let logType = pnl >= 0 ? "log-ok" : "log-error"; let manualMsg = "";
+             if(manual){
+                 disciplinePenalty = pnl >= 0 ? -1 : 0; // Penalize closing winner, not loser
+                 manualMsg = ` Chiusura Manuale (${disciplinePenalty} Dis.).`;
+                 addJournalEntry(pnl >= 0 ? "Uscita manuale da trade profittevole." : "Uscita manuale da trade in perdita.", "log-warn");
+             } else if (reason === "Stop Loss") {
+                 // Optional: Slightly penalize discipline even for valid stop loss?
+                 // disciplinePenalty = -0.5; // Example
+                 // if(disciplinePenalty !== 0) manualMsg += ` (${disciplinePenalty} Dis.)`;
+             }
+             addJournalEntry(`Posiz. ${state.openPosition.type} chiusa @ ${exitPrice.toFixed(5)}. ${reason}. P&L: $${pnl.toFixed(2)}.${manualMsg}`, logType);
+             if(disciplinePenalty !== 0) { state.discipline = Math.min(MAX_DISCIPLINE, Math.max(0, state.discipline + disciplinePenalty)); state.lastDisciplineChange += Math.abs(disciplinePenalty); }
+             const closedPositionData = { ...state.openPosition }; // Store data before clearing
+             state.openPosition = null;
+             updateMentalStateAfterTrade(pnl, prevCapital, closedPositionData); // Pass closed position data
+             updateDisplays();
+              // Check signal immediately after closing
+             let currentSignal = detectSignal();
+             state.lastSignal = currentSignal;
+             updateSignalDisplay(currentSignal);
+             enableTradeButtons(currentSignal !== 'NONE');
+             drawChartOverlays(); // Clear SL/TP lines
+         }
+
+        // ... (updateMentalStateAfterTrade, updateMentalStateOnError, triggerPsychChallenge, handlePsychChoice, simulateNews, addJournalEntry - assicurati usino state. e ui.) ...
+         function updateMentalStateAfterTrade(pnl, prevCapital, closedPosition) { /* ... (simile, usa state.) ... */
+             const percentageChange = prevCapital > 0 ? (pnl / prevCapital) * 100 : pnl > 0 ? 100 : -100;
+             const significantWinThreshold = 1.5; const significantLossThreshold = -1.0;
+              if (state.mentalState === 'Tilt') { state.mentalState = 'Ansioso'; }
+              else if (percentageChange > significantWinThreshold) { state.mentalState = 'Euforico'; triggerPsychChallenge('euphoria'); }
+              else if (percentageChange < significantLossThreshold) { state.mentalState = 'Pauroso'; triggerPsychChallenge('fear_loss'); }
+              else if (pnl < 0 && state.mentalState !== 'Tilt'){ state.mentalState = 'Ansioso'; }
+              else if (pnl >= 0 && (state.mentalState === 'Ansioso' || state.mentalState === 'Pauroso')) { state.mentalState = 'Calmo'; }
+              else { if (state.mentalState !== 'Calmo') state.mentalState = 'Calmo'; }
+          }
+          function updateMentalStateOnError() { /* ... (simile, usa state.) ... */
+              if (state.mentalState === 'Ansioso' || state.mentalState === 'Pauroso') { state.mentalState = 'Tilt'; addJournalEntry("Stato mentale: TILT!", "log-error"); triggerPsychChallenge('tilt'); }
+              else if (state.mentalState !== 'Tilt') { state.mentalState = 'Ansioso'; }
+           }
+          function triggerPsychChallenge(type) { /* ... (simile, usa ui., state.) ... */
+              if (ui.psychChallengeDiv.innerHTML !== "" || state.mentalState === 'Tilt' || !state.tradingSessionActive) return;
+              let challengeText = ""; let button1Text = "Disciplinata"; let button2Text = "Emotiva";
+              let button1Action = () => handlePsychChoice('discipline', type); let button2Action = () => handlePsychChoice('impulse', type);
+              switch (type) {
+                  case 'euphoria': challengeText = "Euforia! Tentato di aumentare size o ignorare segnali?"; button1Text = "Segui Regole"; button2Text = "Ignora Regole"; break;
+                  case 'fear_loss': challengeText = "Paura dopo perdita... Salti il prossimo segnale o riduci size?"; button1Text = "Segui Regole"; button2Text = "Salta/Riduci"; break;
+                  case 'discipline_flux': challengeText = "Disciplina altalenante. Rafforzi regole o lasci andare?"; button1Text = "Rafforza"; button2Text = "Lascia Andare"; break;
+                  case 'tilt': challengeText = "Sei in TILT! Trading bloccato per 10s. Respira."; ui.psychChallengeDiv.innerHTML = `<p><strong>TILT!</strong></p><p>${challengeText}</p>`; updateDisplays(); setTimeout(() => { if(state.mentalState === 'Tilt') state.mentalState = 'Ansioso'; ui.psychChallengeDiv.innerHTML = ""; updateDisplays(); }, 10000); return;
+                  default: return;
+              }
+              ui.psychChallengeDiv.innerHTML = `<p><strong>Sfida Psicologica!</strong></p><p>${challengeText}</p><button id="psychBtn1">${button1Text}</button><button id="psychBtn2">${button2Text}</button>`;
+              document.getElementById('psychBtn1').onclick = button1Action; document.getElementById('psychBtn2').onclick = button2Action;
+          }
+           function handlePsychChoice(choice, type) { /* ... (simile, usa state., ui.) ... */
+              if (!state.tradingSessionActive) return; // Don't handle if session stopped
+              let disciplineChange = 0; let message = "";
+              if (choice === 'discipline') { disciplineChange = 1; state.discipline = Math.min(MAX_DISCIPLINE, state.discipline + disciplineChange); message = `Decisione Disciplinata (+${disciplineChange} Dis.)`; addJournalEntry(message, "log-ok"); if (state.mentalState !== 'Calmo') state.mentalState = 'Calmo'; }
+              else { disciplineChange = -1; state.discipline = Math.max(0, state.discipline + disciplineChange); message = `Decisione Emotiva (${disciplineChange} Dis.)`; addJournalEntry(message, "log-error"); if (type === 'euphoria') state.mentalState = 'Euforico'; else state.mentalState = 'Tilt'; }
+              state.lastDisciplineChange += Math.abs(disciplineChange); ui.psychChallengeDiv.innerHTML = ""; updateDisplays();
+          }
+          function simulateNews() { /* ... (simile, usa state.) ... */
+              if (Math.random() < NEWS_CHANCE) { const i = Math.floor(Math.random() * newsItems.length); state.lastNews = newsItems[i]; }
+          }
+          function addJournalEntry(message, type = "log-info") { /* ... (simile, usa ui.) ... */
+               if (!ui.journalList) return; // Safety check
+               const li = document.createElement('li'); const time = new Date().toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+               li.innerHTML = `<span style="color:var(--text-secondary)">[${time}]</span> ${message}`; li.className = type;
+               ui.journalList.insertBefore(li, ui.journalList.firstChild);
+               while (ui.journalList.children.length > 30) { ui.journalList.removeChild(ui.journalList.lastChild); }
+           }
+
+        function setupChartDimensions() { /* ... identica alla V3 Professional ... */
+              const canvas = ui.marketCanvas; const volCanvas = ui.volumeCanvas; const overlayCanvas = ui.chartOverlays;
+              const container = ui.chartContainer;
+              const width = container.offsetWidth; const height = container.offsetHeight;
+              if(width <= 0 || height <= 0) return; // Don't setup if container not sized
+              canvas.width = width; canvas.height = height;
+              volCanvas.width = width; volCanvas.height = 60;
+              overlayCanvas.width = width; overlayCanvas.height = height;
+              priceChartHeight = height - 60 - 10; volumeHeight = 60;
+              chartMargin = { top: 10, right: 60, bottom: 10 + volumeHeight, left: 10 };
+              volumeMargin = { top: priceChartHeight + 10, right: 60, bottom: 10, left: 10 };
+              chartWidth = width - chartMargin.left - chartMargin.right;
+              console.log(`Chart dimensions set: W=${width}, H=${height}, PriceH=${priceChartHeight}, VolH=${volumeHeight}`);
+         }
+
+        function drawChart() { /* ... identica alla V3 Professional, usando state. e chartState ... */
+             if (!ui.priceCtx || !ui.volumeCtx || !marketState.candleHistory) return;
+             const priceCanvas = ui.marketCanvas; const volCanvas = ui.volumeCanvas;
+             priceCtx.clearRect(0, 0, priceCanvas.width, priceCanvas.height); volumeCtx.clearRect(0, 0, volCanvas.width, volCanvas.height);
+             priceCtx.fillStyle = var(--chart-bg); priceCtx.fillRect(0, 0, priceCanvas.width, priceCanvas.height);
+             const displayHistory = marketState.candleHistory.slice(-CHART_CANDLES_DISPLAYED); if (displayHistory.length < 2) return;
+             let minP = Infinity, maxP = -Infinity, maxV = 0;
+             displayHistory.forEach(c => { minP = Math.min(minP, c.l); maxP = Math.max(maxP, c.h); maxV = Math.max(maxV, c.volume); });
+             if (maxP === minP) { maxP += PIP_VALUE * 10; minP -= PIP_VALUE*10; }
+             const priceRange = maxP - minP; if (priceRange <= 0) return;
+             const pricePadding = priceRange * 0.05; chartState.minPrice = minP - pricePadding; chartState.maxPrice = maxP + pricePadding;
+             chartState.finalPriceRange = chartState.maxPrice - chartState.minPrice; if (chartState.finalPriceRange <= 0) return;
+             chartState.maxVolume = maxV > 0 ? maxV * 1.1 : 1;
+             chartState.candleTotalWidth = chartWidth / CHART_CANDLES_DISPLAYED; chartState.candleBodyWidth = chartState.candleTotalWidth * 0.7; chartState.candleSpacing = chartState.candleTotalWidth * 0.3;
+             priceCtx.strokeStyle = var(--border-color); priceCtx.lineWidth = 0.5; priceCtx.fillStyle = var(--text-secondary); priceCtx.font = '9px Segoe UI'; priceCtx.textAlign = 'left';
+             const numPriceLabels = 6;
+             for (let i = 0; i <= numPriceLabels; i++) { const price = chartState.maxPrice - (chartState.finalPriceRange * i / numPriceLabels); const y = chartMargin.top + (i / numPriceLabels) * priceChartHeight; priceCtx.fillText(price.toFixed(5), priceCanvas.width - chartMargin.right + 5, y + 3); priceCtx.strokeStyle = 'rgba(48, 54, 61, 0.4)'; priceCtx.beginPath(); priceCtx.moveTo(chartMargin.left, y); priceCtx.lineTo(priceCanvas.width - chartMargin.right, y); priceCtx.stroke(); }
+             priceCtx.strokeStyle = var(--border-color); priceCtx.lineWidth = 1; const maLinePoints = [];
+             displayHistory.forEach((candle, index) => { const x = chartMargin.left + index * chartState.candleTotalWidth + chartState.candleSpacing / 2; const yHigh = chartMargin.top + ((chartState.maxPrice - candle.h) / chartState.finalPriceRange) * priceChartHeight; const yLow = chartMargin.top + ((chartState.maxPrice - candle.l) / chartState.finalPriceRange) * priceChartHeight; const yOpen = chartMargin.top + ((chartState.maxPrice - candle.o) / chartState.finalPriceRange) * priceChartHeight; const yClose = chartMargin.top + ((chartState.maxPrice - candle.c) / chartState.finalPriceRange) * priceChartHeight; const isGreen = candle.c >= candle.o; priceCtx.strokeStyle = var(--candle-wick); priceCtx.fillStyle = isGreen ? var(--accent-green) : var(--accent-red); priceCtx.beginPath(); priceCtx.moveTo(x + chartState.candleBodyWidth / 2, yHigh); priceCtx.lineTo(x + chartState.candleBodyWidth / 2, yLow); priceCtx.stroke(); priceCtx.fillRect(x, Math.min(yOpen, yClose), chartState.candleBodyWidth, Math.max(1, Math.abs(yOpen - yClose))); if (candle.ma !== null) { maLinePoints.push({ x: x + chartState.candleBodyWidth / 2, y: chartMargin.top + ((chartState.maxPrice - candle.ma) / chartState.finalPriceRange) * priceChartHeight }); } });
+             if (maLinePoints.length > 1) { priceCtx.strokeStyle = var(--accent-yellow); priceCtx.lineWidth = 1; priceCtx.beginPath(); maLinePoints.forEach((p, i)=>(i===0)?priceCtx.moveTo(p.x, p.y):priceCtx.lineTo(p.x, p.y)); priceCtx.stroke(); }
+             const maxVolHeight = volumeHeight * 0.9; volumeCtx.clearRect(0, 0, volCanvas.width, volCanvas.height);
+             displayHistory.forEach((candle, index) => { const x = volumeMargin.left + index * chartState.candleTotalWidth + chartState.candleSpacing / 2; const barHeight = (candle.volume / chartState.maxVolume) * maxVolHeight; const y = volumeMargin.top + (volumeHeight - barHeight); volumeCtx.fillStyle = candle.c >= candle.o ? 'rgba(35, 134, 54, 0.5)' : 'rgba(218, 54, 51, 0.5)'; volumeCtx.fillRect(x, y, chartState.candleBodyWidth, barHeight); });
+             const yCurrent = chartMargin.top + ((chartState.maxPrice - marketState.currentPrice) / chartState.finalPriceRange) * priceChartHeight;
+             if (yCurrent > chartMargin.top && yCurrent < chartMargin.top + priceChartHeight) { priceCtx.strokeStyle = 'rgba(201, 209, 217, 0.7)'; priceCtx.lineWidth = 0.5; priceCtx.setLineDash([3, 3]); priceCtx.beginPath(); priceCtx.moveTo(chartMargin.left, yCurrent); priceCtx.lineTo(priceCanvas.width - chartMargin.right, yCurrent); priceCtx.stroke(); priceCtx.setLineDash([]); priceCtx.fillStyle = 'rgba(48, 54, 61, 0.8)'; priceCtx.fillRect(priceCanvas.width - chartMargin.right, yCurrent - 7, chartMargin.right -2 , 14); priceCtx.fillStyle = var(--text-primary); priceCtx.font = 'bold 9px Segoe UI'; priceCtx.textAlign = 'left'; priceCtx.fillText(marketState.currentPrice.toFixed(5), priceCanvas.width - chartMargin.right + 5, yCurrent + 3); }
+          }
+
+        function drawChartOverlays() { /* ... identica, usando state.openPosition e chartState ... */
+             const overlayCanvas = ui.chartOverlays; if (!overlayCanvas || !ui.overlayCtx) return; const overlayCtx = ui.overlayCtx;
+             overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+             if (state.openPosition && chartState.finalPriceRange > 0) {
+                 const pos = state.openPosition; const drawLine = (price, color, text) => {
+                     const y = chartMargin.top + ((chartState.maxPrice - price) / chartState.finalPriceRange) * priceChartHeight;
+                      if (y > chartMargin.top && y < chartMargin.top + priceChartHeight) {
+                          overlayCtx.strokeStyle = color; overlayCtx.lineWidth = 1; overlayCtx.setLineDash([5, 3]);
+                          overlayCtx.beginPath(); overlayCtx.moveTo(chartMargin.left, y); overlayCtx.lineTo(overlayCanvas.width - chartMargin.right, y); overlayCtx.stroke();
+                          overlayCtx.setLineDash([]); overlayCtx.fillStyle = color; overlayCtx.font = 'bold 9px Segoe UI'; overlayCtx.textAlign = 'left';
+                          overlayCtx.clearRect(overlayCanvas.width - chartMargin.right + 1, y - 7, chartMargin.right - 4, 14); // Clear for label bg
+                          overlayCtx.fillStyle = color; // Reset fill style
+                          overlayCtx.fillText(text + " " + price.toFixed(5), overlayCanvas.width - chartMargin.right + 5, y + 3);
+                      }
+                 };
+                 drawLine(pos.entryPrice, var(--accent-blue), 'Entry'); drawLine(pos.stopLossPrice, var(--accent-red), 'SL'); drawLine(pos.takeProfitPrice, var(--accent-green), 'TP');
+             }
+         }
+
+        // Loop principale del mercato (sempre attivo)
+        function marketUpdateLoop() {
+            try {
+                simulateMarketTick(); // Update market data + session logic if active
+                drawChart(); // Redraw chart
+                drawChartOverlays(); // Redraw SL/TP lines if needed
+            } catch (error) {
+                console.error("Error in marketUpdateLoop:", error);
+                // Potrebbe essere necessario fermare il loop qui in caso di errore grave
+                // cancelAnimationFrame(marketState.animationFrameId);
+                // return;
+            }
+            // Schedule next frame
+            marketState.animationFrameId = requestAnimationFrame(marketUpdateLoop);
+        }
+
+        // Inizio Sessione Trading
+        function startTradingSession() {
+            if (state.tradingSessionActive) return;
+             console.log("Starting trading session...");
+            resetStateForSession(); // Resetta solo stato sessione
+            state.tradingSessionActive = true;
+            state.gameOver = false;
+            state.mentalState = 'Calmo'; // Start calm
+
+            // Update button state/text
+            ui.startStopButton.textContent = "Termina Sessione";
+            ui.startStopButton.classList.remove('action');
+            ui.startStopButton.classList.add('sell'); // Red button to stop
+
+             // Enable inputs
+             ui.tradeSizeInput.disabled = false;
+             ui.stopLossPercentInput.disabled = false;
+
+
+            addJournalEntry("Sessione di Trading Iniziata.", "log-info");
+            updateDisplays();
+            checkSignal(); // Check signal immediately to enable buttons if needed
+        }
+
+        // Fine Sessione Trading
+        function stopTradingSession(isGameOver = false) { // Flag if stopped due to game over condition
+            if (!state.tradingSessionActive && !isGameOver) return; // Allow calling even if not active IF it's a game over
+             console.log("Stopping trading session...");
+
+             if(state.openPosition) { // Close any open position
+                 closePosition(marketState.currentPrice, "Sessione Terminata", 0, true);
+             }
+
+            state.tradingSessionActive = false;
+            state.gameOver = isGameOver; // Mark session as over
+
+            addJournalEntry(`Sessione Terminata. ${isGameOver ? 'Raggiunto limite!' : ''}`, "log-info");
+
+            // Update Button
+            ui.startStopButton.textContent = isGameOver ? "Ricomincia Sessione" : "Inizia Sessione Trading"; // Change text based on reason
+            ui.startStopButton.classList.remove('sell');
+            ui.startStopButton.classList.add('action');
+
+            // Disable Inputs and Trade buttons
+             ui.tradeSizeInput.disabled = true;
+             ui.stopLossPercentInput.disabled = true;
+            enableTradeButtons(false);
+            ui.closePositionButton.disabled = true;
+
+
+            updateSignalDisplay(isGameOver ? 'FINITA' : 'INATTIVA');
+            state.mentalState = isGameOver ? 'Game Over' : 'Sessione Finita';
+            updateDisplays(); // Update UI
+             drawChartOverlays(); // Clear SL/TP Lines
+        }
+
+        // Inizializzazione Globale
+        function initializeGame() {
+             console.log("Initializing Simulator...");
+             if (!ui.marketCanvas || !ui.volumeCanvas || !ui.chartOverlays || !ui.priceCtx || !ui.volumeCtx ||!ui.overlayCtx) {
+                 console.error("Canvas elements or contexts not ready!");
+                 // Display error to user maybe
+                 document.body.innerHTML = "Errore: Impossibile inizializzare l'area grafica.";
+                 return;
+             }
+
+             setupChartDimensions(); // Set initial dimensions
+              window.addEventListener('resize', setupChartDimensions); // Adjust chart on resize
+
+             resetStateForSession(); // Set initial trading session state (inactive)
+             resetState(); // Set initial state including market history prefill
+
+             // Attach listeners
+             ui.startStopButton.addEventListener('click', () => {
+                 if (state.tradingSessionActive) stopTradingSession(); else startTradingSession();
+             });
+              // ... (attach other listeners: buy, sell, close) ...
+              ui.buyButton.addEventListener('click', () => executeTrade('BUY'));
+              ui.sellButton.addEventListener('click', () => executeTrade('SELL'));
+              ui.closePositionButton.addEventListener('click', () => {
+                  if(state.openPosition && state.tradingSessionActive && state.mentalState !== 'Tilt') {
+                      closePosition(marketState.currentPrice, "Chiusura Manuale", 0, true);
+                  }
+              });
+
+
+             // Initial UI state
+             updateDisplays();
+             enableTradeButtons(false); // Ensure disabled initially
+             ui.tradeSizeInput.disabled = true; // Disable inputs initially
+             ui.stopLossPercentInput.disabled = true;
+
+             // Start the continuous market simulation loop
+              cancelAnimationFrame(marketState.animationFrameId); // Clear previous loop if any
+             marketState.animationFrameId = requestAnimationFrame(marketUpdateLoop);
+             console.log("Market Simulation Loop Started.");
+        }
+
+        // GO!
+        document.addEventListener('DOMContentLoaded', initializeGame);
+
+    </script>
+</body>
+</html>
