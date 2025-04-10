@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Flappy Pizza - Peperoncino Edition</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #87CEEB; /* Azzurro cielo */
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        #game-area {
+            width: 400px;
+            height: 600px;
+            background-color: #f0f0f0;
+            border: 5px solid #333;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAACXBIWXMAAAsTAAALEwEAmpwYAAABAElEQVQ4T2NkoDJgpLJwMhCSAMVfAyMDI8OLIUYGJkYGFgYG/z9wMHyAgYHhA8L/gYGJgYElAz8DKwMLQzgjAwPDNxD+x8DIwMCQAUhU+P//wMDE/4+BgYHhHwPDf0ZQjP8ZPjAw/P/AxPD/BwYGBob+M/w/YGBg+MPA+A+YyMDA8A8I/wHjHzA0MjAwMPwbxAJkZgImBgaGz1A/wPz/wMDE+A+U/wHzPygo+P/D/w8DAwPDf0YCgv8ZfoDxD0hQ+P//P8P/DwwMDEyMHCD9B8z+gPgf8P8HDgYWBlxc/z/A/A8yhv9/mP8fYGBg+A+L/wFQAACzEy4tYiw+AAAAAABJRU5ErkJggg==');
+            background-repeat: repeat;
+            animation: backgroundScroll 10s linear infinite;
+        }
+
+        @keyframes backgroundScroll {
+            from { background-position: 0 0; }
+            to { background-position: -256px 0; }
+        }
+
+        #pizza {
+            width: 50px; /* Dimensione hitbox */
+            height: 50px; /* Dimensione hitbox */
+            position: absolute;
+            top: 250px;
+            left: 50px;
+            font-size: 45px; /* Dimensione visuale emoji */
+            line-height: 50px;
+            text-align: center;
+            z-index: 10;
+            transition: transform 0.1s ease-out;
+            /* Aggiungi per vedere la hitbox (rimuovi in produzione) */
+            /* border: 1px solid red; */
+        }
+
+        .obstacle {
+            position: absolute;
+            width: 55px;  /* Dimensione hitbox peperoncino */
+            height: 55px; /* Dimensione hitbox peperoncino */
+            z-index: 5;
+            font-size: 50px; /* Dimensione visuale emoji */
+            display: flex;     /* Per centrare l'emoji */
+            justify-content: center;
+            align-items: center;
+            /* Aggiungi per vedere la hitbox (rimuovi in produzione) */
+            /* border: 1px solid blue; */
+        }
+
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            z-index: 20;
+        }
+
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 28px;
+            font-weight: bold;
+            color: #c0392b;
+            text-align: center;
+            z-index: 25;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            display: block;
+        }
+
+        #message.hidden {
+            display: none;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="game-area">
+        <div id="pizza">🍕</div>
+        <div id="score">Score: 0</div>
+        <div id="message">
+            Flappy Pizza!<br>
+            <span style="font-size: 18px;">Evita i Peperoncini!</span><br>
+            <span style="font-size: 18px;">Clicca o Spazio per iniziare</span>
+        </div>
+        <!-- Gli ostacoli verranno aggiunti qui da JS -->
+    </div>
+
+    <script>
+        const gameArea = document.getElementById('game-area');
+        const pizzaElement = document.getElementById('pizza');
+        const scoreElement = document.getElementById('score');
+        const messageElement = document.getElementById('message');
+
+        // --- Costanti di Gioco ---
+        const GRAVITY = 0.4;
+        const JUMP_STRENGTH = -7;
+        const OBSTACLE_SPEED = 3;
+        const OBSTACLE_WIDTH = 55; // Larghezza hitbox peperoncino (dal CSS)
+        const OBSTACLE_HEIGHT = 55; // Altezza hitbox peperoncino (dal CSS)
+        const OBSTACLE_VERTICAL_MARGIN = 60; // Spazio minimo dai bordi alto/basso
+        const OBSTACLE_INTERVAL = 1300; // Intervallo generazione (leggermente più frequente)
+        const PIZZA_HEIGHT = 50;
+        const PIZZA_WIDTH = 50;
+        const GAME_AREA_HEIGHT = gameArea.clientHeight;
+        const GAME_AREA_WIDTH = gameArea.clientWidth;
+
+        // --- Variabili di Stato ---
+        let pizzaY = GAME_AREA_HEIGHT / 2 - PIZZA_HEIGHT / 2;
+        let pizzaVelocity = 0;
+        let score = 0;
+        // Struttura ostacoli: [ { element: div, x: number, y: number, scored: boolean } ]
+        let obstacles = [];
+        let gameLoopInterval = null;
+        let obstacleGeneratorInterval = null;
+        let gameStarted = false;
+        let gameOver = false;
+
+        // --- Funzioni di Gioco ---
+
+        function showMessage(text, smallText = "") {
+            messageElement.innerHTML = text + (smallText ? `<br><span style="font-size: 18px;">${smallText}</span>` : "");
+            messageElement.classList.remove('hidden');
+        }
+
+        function hideMessage() {
+            messageElement.classList.add('hidden');
+        }
+
+        function updateScore() {
+            scoreElement.textContent = `Score: ${score}`;
+        }
+
+        function jump() {
+            if (gameOver) return;
+            if (!gameStarted) {
+                startGame();
+            }
+            pizzaVelocity = JUMP_STRENGTH;
+            pizzaElement.style.transform = 'rotate(-20deg)';
+            setTimeout(() => {
+                if (!gameOver) pizzaElement.style.transform = 'rotate(0deg)';
+            }, 150);
+        }
+
+        function createObstacle() {
+            if (gameOver) return;
+
+            // Posizione Y casuale, ma con margini dai bordi
+            const minY = OBSTACLE_VERTICAL_MARGIN;
+            const maxY = GAME_AREA_HEIGHT - OBSTACLE_HEIGHT - OBSTACLE_VERTICAL_MARGIN;
+            const randomY = Math.random() * (maxY - minY) + minY;
+
+            const obstacleElement = document.createElement('div');
+            obstacleElement.classList.add('obstacle');
+            obstacleElement.style.top = randomY + 'px';
+            obstacleElement.style.left = GAME_AREA_WIDTH + 'px'; // Inizia fuori schermo
+            obstacleElement.textContent = '🌶️'; // Emoji peperoncino
+
+            gameArea.appendChild(obstacleElement);
+
+            obstacles.push({
+                element: obstacleElement,
+                x: GAME_AREA_WIDTH,
+                y: randomY, // Salva la coordinata y (potrebbe servire)
+                scored: false
+            });
+        }
+
+        function moveObstacles() {
+            const pizzaLeft = pizzaElement.offsetLeft; // Posizione sinistra della pizza
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.x -= OBSTACLE_SPEED;
+
+                obs.element.style.left = obs.x + 'px';
+
+                // Controllo Punteggio: Il bordo destro dell'ostacolo supera il bordo sinistro della pizza
+                if (!obs.scored && (obs.x + OBSTACLE_WIDTH) < pizzaLeft) {
+                    score++;
+                    obs.scored = true;
+                    updateScore();
+                }
+
+                // Rimuovi ostacoli usciti dallo schermo a sinistra
+                if (obs.x + OBSTACLE_WIDTH < 0) {
+                    gameArea.removeChild(obs.element);
+                    obstacles.splice(i, 1);
+                }
+            }
+        }
+
+        function checkCollision() {
+            const pizzaRect = pizzaElement.getBoundingClientRect();
+
+            // Collisione con bordi Alto/Basso
+            // Usiamo pizzaY che è relativo a gameArea, più semplice
+            if (pizzaY < 0 || pizzaY + PIZZA_HEIGHT > GAME_AREA_HEIGHT) {
+                console.log("Collisione Bordo");
+                return true;
+            }
+
+            // Collisione con ostacoli (peperoncini)
+            for (let obs of obstacles) {
+                const obstacleRect = obs.element.getBoundingClientRect();
+
+                // Test di collisione tra rettangoli (AABB - Axis-Aligned Bounding Box)
+                if (
+                    pizzaRect.left < obstacleRect.right &&
+                    pizzaRect.right > obstacleRect.left &&
+                    pizzaRect.top < obstacleRect.bottom &&
+                    pizzaRect.bottom > obstacleRect.top
+                ) {
+                    console.log("Collisione Peperoncino!");
+                    return true; // Collisione!
+                }
+            }
+            return false; // Nessuna collisione
+        }
+
+
+        function gameLoop() {
+            if (gameOver) return;
+
+            // 1. Applica gravità
+            pizzaVelocity += GRAVITY;
+            pizzaY += pizzaVelocity;
+
+            // 2. Aggiorna posizione Pizza
+            pizzaElement.style.top = pizzaY + 'px';
+
+            // 3. Muovi Ostacoli
+            moveObstacles();
+
+            // 4. Controlla Collisioni
+            if (checkCollision()) {
+                endGame();
+                return;
+            }
+
+            // Applica rotazione in caduta
+            if (pizzaVelocity > 1) {
+                 pizzaElement.style.transform = 'rotate(20deg)';
+            }
+        }
+
+        function startGame() {
+            // Resetta stato
+            pizzaY = GAME_AREA_HEIGHT / 2 - PIZZA_HEIGHT / 2;
+            pizzaVelocity = 0;
+            score = 0;
+            gameOver = false;
+            gameStarted = true;
+
+            // Rimuovi ostacoli esistenti dal DOM e dall'array
+            obstacles.forEach(obs => {
+                if (obs.element.parentNode === gameArea) { // Controlla se è ancora figlio
+                    gameArea.removeChild(obs.element);
+                }
+            });
+            obstacles = []; // Svuota l'array
+
+            // Resetta UI
+            pizzaElement.style.top = pizzaY + 'px';
+            pizzaElement.style.transform = 'rotate(0deg)';
+            updateScore();
+            hideMessage();
+
+            // Avvia i loop (pulendo prima eventuali residui)
+            if(gameLoopInterval) clearInterval(gameLoopInterval);
+            if(obstacleGeneratorInterval) clearInterval(obstacleGeneratorInterval);
+            gameLoopInterval = setInterval(gameLoop, 20); // ~50 FPS
+            obstacleGeneratorInterval = setInterval(createObstacle, OBSTACLE_INTERVAL);
+        }
+
+        function endGame() {
+            gameOver = true;
+            gameStarted = false;
+            clearInterval(gameLoopInterval);
+            clearInterval(obstacleGeneratorInterval);
+            pizzaElement.style.transform = 'rotate(90deg)';
+            showMessage(`Game Over! Score: ${score}`, "Clicca o Spazio per rigiocare");
+        }
+
+        // --- Event Listeners ---
+        gameArea.addEventListener('mousedown', jump);
+        gameArea.addEventListener('touchstart', (e) => {
+             e.preventDefault();
+             jump();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (gameOver) {
+                    startGame();
+                } else {
+                    jump();
+                }
+            }
+        });
+
+        // Messaggio iniziale
+        showMessage("Flappy Pizza!", "Evita i Peperoncini!<br>Clicca o Spazio per iniziare");
+
+    </script>
+
+</body>
+</html>
