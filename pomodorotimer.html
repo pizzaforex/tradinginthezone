@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pomodoro Timer</title>
+    <style>
+        /* --- Reset Base e Stili Globali --- */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f06, #f90); /* Gradiente vivace */
+            color: #333;
+            transition: background 0.5s ease; /* Transizione per cambio modalità */
+        }
+
+        /* --- Contenitore Principale --- */
+        .pomodoro-container {
+            background-color: rgba(255, 255, 255, 0.9); /* Sfondo bianco semi-trasparente */
+            padding: 30px 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        /* --- Selettore Modalità --- */
+        .modes {
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: center;
+            gap: 10px; /* Spazio tra i pulsanti */
+        }
+
+        .modes button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            background-color: rgba(0, 0, 0, 0.1);
+            color: #555;
+            font-size: 0.9em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
+        }
+
+        .modes button:hover {
+            background-color: rgba(0, 0, 0, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .modes button.active {
+            /* Stile definito dinamicamente da JS in base alla modalità */
+            color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+        }
+
+        /* --- Display Timer --- */
+        .timer-display {
+            font-size: 5rem; /* Dimensione grande per il tempo */
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #222; /* Colore scuro per contrasto */
+            line-height: 1;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* --- Controlli Principali (Start/Pausa/Reset) --- */
+        .controls {
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .controls button {
+            padding: 12px 25px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .controls button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .controls button:active {
+             transform: translateY(-1px);
+             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        #start-pause {
+            /* Colore definito dinamicamente */
+            color: white;
+        }
+
+        #reset {
+            background-color: #eee;
+            color: #555;
+        }
+        #reset:hover {
+             background-color: #ddd;
+        }
+
+        /* --- Contatore Pomodori (Opzionale) --- */
+        .pomodoro-count {
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        /* --- Stili Specifici per Modalità --- */
+        body.mode-pomodoro { background: linear-gradient(135deg, #FF416C, #FF4B2B); }
+        body.mode-shortBreak { background: linear-gradient(135deg, #11998e, #38ef7d); }
+        body.mode-longBreak { background: linear-gradient(135deg, #2980B9, #6DD5FA); }
+
+        .mode-pomodoro .modes button.active { background-color: #FF4B2B; }
+        .mode-pomodoro #start-pause { background-color: #FF4B2B; }
+        .mode-pomodoro #start-pause:hover { background-color: #E04020; }
+
+        .mode-shortBreak .modes button.active { background-color: #11998e; }
+        .mode-shortBreak #start-pause { background-color: #11998e; }
+        .mode-shortBreak #start-pause:hover { background-color: #0E8074; }
+
+
+        .mode-longBreak .modes button.active { background-color: #2980B9; }
+        .mode-longBreak #start-pause { background-color: #2980B9; }
+        .mode-longBreak #start-pause:hover { background-color: #206694; }
+
+        /* --- Media Query per schermi più piccoli --- */
+        @media (max-width: 480px) {
+            .pomodoro-container {
+                padding: 20px;
+                margin: 10px;
+            }
+            .timer-display {
+                font-size: 4rem;
+            }
+            .modes button {
+                padding: 8px 10px;
+                font-size: 0.8em;
+            }
+            .controls button {
+                padding: 10px 20px;
+                font-size: 1em;
+            }
+        }
+
+    </style>
+</head>
+<body class="mode-pomodoro">
+
+    <div class="pomodoro-container">
+        <h1>Pomodoro Timer</h1>
+
+        <div class="modes">
+            <button data-mode="pomodoro">Pomodoro</button>
+            <button data-mode="shortBreak">Pausa Breve</button>
+            <button data-mode="longBreak">Pausa Lunga</button>
+        </div>
+
+        <div class="timer-display" id="time-left">25:00</div>
+
+        <div class="controls">
+            <button id="start-pause">Inizia</button>
+            <button id="reset">Reset</button>
+        </div>
+
+        <div class="pomodoro-count">
+            Sessioni completate: <span id="session-count">0</span>
+        </div>
+    </div>
+
+    <!-- Elemento audio per la notifica (un suono semplice) -->
+    <audio id="alarm-sound" src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" preload="auto"></audio>
+
+    <script>
+        // --- Selezione Elementi DOM ---
+        const timeLeftDisplay = document.getElementById('time-left');
+        const startPauseButton = document.getElementById('start-pause');
+        const resetButton = document.getElementById('reset');
+        const modeButtons = document.querySelectorAll('.modes button');
+        const sessionCountDisplay = document.getElementById('session-count');
+        const alarmSound = document.getElementById('alarm-sound');
+        const bodyElement = document.body;
+        const pageTitle = document.title; // Salva il titolo originale
+
+        // --- Stato del Timer ---
+        let timerInterval = null; // ID per setInterval
+        let currentMode = 'pomodoro'; // Modalità corrente
+        let isRunning = false;      // Il timer è attivo?
+        let pomodorosCompleted = 0; // Contatore sessioni Pomodoro
+        let currentTimeInSeconds = 0; // Tempo rimanente in secondi
+
+        // --- Impostazioni Durata (in minuti) ---
+        const settings = {
+            pomodoro: 25,
+            shortBreak: 5,
+            longBreak: 15,
+            longBreakInterval: 4 // Ogni quante sessioni Pomodoro fare una pausa lunga
+        };
+
+        // --- Funzioni Principali ---
+
+        // Aggiorna il display del timer e il titolo della pagina
+        function updateDisplay() {
+            const minutes = Math.floor(currentTimeInSeconds / 60);
+            const seconds = currentTimeInSeconds % 60;
+            const displayString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+            timeLeftDisplay.textContent = displayString;
+            document.title = `${displayString} - ${currentMode === 'pomodoro' ? 'Focus' : 'Pausa'} | ${pageTitle}`;
+        }
+
+        // Avvia il conto alla rovescia
+        function startTimer() {
+            if (isRunning) return; // Non fare nulla se già in esecuzione
+
+            isRunning = true;
+            startPauseButton.textContent = 'Pausa';
+            bodyElement.classList.add('timer-active'); // (Opzionale: per stili CSS aggiuntivi)
+
+            timerInterval = setInterval(() => {
+                currentTimeInSeconds--;
+                updateDisplay();
+
+                if (currentTimeInSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    isRunning = false;
+                    startPauseButton.textContent = 'Inizia';
+                    bodyElement.classList.remove('timer-active');
+                    alarmSound.play(); // Suona l'allarme
+
+                    // Logica cambio modalità automatico
+                    if (currentMode === 'pomodoro') {
+                        pomodorosCompleted++;
+                        sessionCountDisplay.textContent = pomodorosCompleted;
+                        // Controlla se è ora di una pausa lunga
+                        if (pomodorosCompleted % settings.longBreakInterval === 0) {
+                            switchMode('longBreak');
+                        } else {
+                            switchMode('shortBreak');
+                        }
+                    } else { // Se era una pausa, torna a pomodoro
+                        switchMode('pomodoro');
+                    }
+                     // Potresti voler avviare automaticamente la modalità successiva
+                     // startTimer(); // Decommenta per avvio automatico
+                }
+            }, 1000); // Esegui ogni secondo
+        }
+
+        // Mette in pausa il timer
+        function pauseTimer() {
+            if (!isRunning) return; // Non fare nulla se non è in esecuzione
+
+            clearInterval(timerInterval);
+            timerInterval = null;
+            isRunning = false;
+            startPauseButton.textContent = 'Riprendi';
+            bodyElement.classList.remove('timer-active');
+        }
+
+        // Resetta il timer alla durata della modalità corrente
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            isRunning = false;
+            startPauseButton.textContent = 'Inizia';
+            bodyElement.classList.remove('timer-active');
+            currentTimeInSeconds = settings[currentMode] * 60; // Reimposta il tempo
+            updateDisplay();
+            document.title = pageTitle; // Resetta il titolo della pagina
+        }
+
+        // Cambia la modalità (Pomodoro, Pausa Breve, Pausa Lunga)
+        function switchMode(newMode) {
+            if (!settings[newMode]) return; // Modalità non valida
+
+            currentMode = newMode;
+
+            // Aggiorna stile pulsanti modalità
+            modeButtons.forEach(button => {
+                button.classList.remove('active');
+                if (button.dataset.mode === newMode) {
+                    button.classList.add('active');
+                }
+            });
+
+            // Aggiorna classe del body per cambio stile/colore
+            bodyElement.className = `mode-${newMode}`; // Rimuove classi vecchie e aggiunge la nuova
+
+            resetTimer(); // Resetta il timer con la nuova durata
+        }
+
+        // --- Event Listener ---
+
+        // Pulsante Start/Pausa/Riprendi
+        startPauseButton.addEventListener('click', () => {
+            if (isRunning) {
+                pauseTimer();
+            } else {
+                startTimer();
+            }
+        });
+
+        // Pulsante Reset
+        resetButton.addEventListener('click', resetTimer);
+
+        // Pulsanti Cambio Modalità
+        modeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                switchMode(button.dataset.mode);
+            });
+        });
+
+        // --- Inizializzazione ---
+        function initializeTimer() {
+            // Imposta la modalità 'pomodoro' come attiva all'avvio
+            switchMode('pomodoro');
+        }
+
+        // Avvia l'inizializzazione quando il DOM è pronto
+        document.addEventListener('DOMContentLoaded', initializeTimer);
+
+    </script>
+
+</body>
+</html>
