@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Etoile Luxury Events - Water Effect</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent; /* Rimuove il flash blu al tocco su mobile */
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            touch-action: none; /* Cruciale per gli eventi touch personalizzati sul canvas */
+            overscroll-behavior: none; /* Previene il "pull-to-refresh" o lo scroll oltre i bordi */
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh; /* Usa 100dvh se vuoi considerare la barra degli indirizzi mobile dinamica */
+            /* height: 100dvh; */
+            cursor: crosshair;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block; /* Rimuove eventuale spazio extra sotto il canvas */
+        }
+
+        .content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            z-index: 10;
+            pointer-events: none;
+            mix-blend-mode: difference;
+        }
+
+        .content h1 {
+            font-size: clamp(2.2rem, 7vw, 6rem);
+            font-weight: 800; /* Leggermente meno bold per font sans-serif puliti */
+            margin: 0;
+            letter-spacing: -0.03em;
+            line-height: 1.05;
+            text-transform: uppercase;
+        }
+
+        .content p {
+            font-size: clamp(0.85rem, 1.8vw, 1.2rem);
+            margin-top: 0.7rem;
+            opacity: 0.9;
+            font-weight: 300;
+            letter-spacing: 0.05em;
+        }
+
+        .loading {
+            position: fixed; /* Fixed per rimanere centrato anche se la pagina potesse scrollare */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 200;
+        }
+
+        .controls-toggle {
+            position: fixed; /* Fixed per non muoversi con eventuale (improbabile) scroll */
+            top: 15px;
+            right: 15px;
+            width: 44px; /* Leggermente più grande per tocco facile */
+            height: 44px;
+            background-color: rgba(30, 30, 30, 0.7); /* Sfondo più scuro */
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: white;
+            border-radius: 8px; /* Più arrotondato */
+            display: flex;
+            flex-direction: column; /* Per centrare le barre */
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 150;
+            transition: background-color 0.2s ease-out;
+            user-select: none;
+        }
+        .controls-toggle:hover, .controls-toggle:focus { /* :focus per accessibilità */
+            background-color: rgba(50, 50, 50, 0.8);
+        }
+        .controls-toggle .bar {
+            display: block;
+            width: 22px; /* Barre leggermente più lunghe */
+            height: 2.5px; /* Barre leggermente più spesse */
+            background-color: white;
+            margin: 2.5px 0; /* Spaziatura tra le barre */
+            border-radius: 1px;
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+        }
+        .controls-toggle.active .bar1 {
+            transform: translateY(7.5px) rotate(45deg);
+        }
+        .controls-toggle.active .bar2 {
+            opacity: 0;
+        }
+        .controls-toggle.active .bar3 {
+            transform: translateY(-7.5px) rotate(-45deg);
+        }
+
+
+        .controls {
+            position: fixed; /* Fixed per rimanere in vista anche se la pagina potesse scrollare */
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(120%); /* Nascosto sotto di default */
+            color: white;
+            font-size: 12px;
+            font-family: monospace; /* Manteniamo monospace per i controlli per leggibilità dei valori */
+            z-index: 100;
+            background: rgba(20, 20, 20, 0.85); /* Sfondo più scuro e con più opacità */
+            backdrop-filter: blur(5px); /* Effetto blur per browser che lo supportano */
+            -webkit-backdrop-filter: blur(5px);
+            padding: 15px;
+            border-radius: 10px;
+            width: calc(100% - 30px);
+            max-width: 320px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); /* Transizione smooth */
+            
+            max-height: calc(50vh - 40px); /* Limita altezza e lascia spazio sopra/sotto */
+            overflow-y: auto; /* Abilita lo scroll verticale se necessario */
+        }
+        .controls.visible {
+            transform: translateX(-50%) translateY(0%); /* Lo porta in vista */
+        }
+
+        .controls label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px; /* Aumenta spazio tra le label */
+            padding-bottom: 5px; /* Spazio sotto ogni label */
+            border-bottom: 1px solid rgba(255,255,255,0.1); /* Separatore leggero */
+        }
+        .controls label:last-child {
+            margin-bottom: 0;
+            border-bottom: none;
+        }
+
+        .controls input[type="range"] {
+            width: 130px; /* Un po' più di spazio per lo slider */
+            /* Stili per migliorare l'aspetto degli slider (opzionale, ma carino) */
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 5px;
+            outline: none;
+        }
+        .controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .controls input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="canvas"></canvas>
+        <div class="loading" id="loading">Inizializzazione effetto acqua...</div>
+        
+        <button class="controls-toggle" id="controlsToggle" aria-label="Mostra/Nascondi Controlli" aria-expanded="false">
+            <span class="bar bar1"></span>
+            <span class="bar bar2"></span>
+            <span class="bar bar3"></span>
+        </button>
+
+        <div class="content">
+            <h1>Etoile<br>Luxury Events</h1>
+            <p>L’eccellenza nell’arte di celebrare.</p>
+        </div>
+        <div class="controls" id="controlsPanel">
+            <label>Forza Onde: <input type="range" id="waveStrength" min="0" max="100" value="20"></label>
+            <label>Viscosità: <input type="range" id="viscosity" min="900" max="999" value="980"></label>
+            <label>Rifrazione: <input type="range" id="refraction" min="0" max="100" value="30"></label>
+            <label>Int. Pioggia: <input type="range" id="rainIntensity" min="0" max="100" value="0"></label>
+            <!-- Puoi aggiungere altri controlli qui se necessario -->
+        </div>
+    </div>
+
+    <script>
+        class WaterSimulation {
+            constructor(canvas) {
+                this.canvas = canvas;
+                const isMobile = window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 768;
+                this.simulationSizeBase = isMobile ? 256 : 512; // Usa 256 per mobile/touch, 512 altrimenti
+
+                this.gl = canvas.getContext('webgl2', {
+                    alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: false
+                });
+
+                if (!this.gl) {
+                    this.handleCriticalError('WebGL2 non supportato! Prova un browser più moderno.');
+                    return;
+                }
+
+                if (!this.gl.getExtension('EXT_color_buffer_float')) {
+                     console.warn('Estensione EXT_color_buffer_float non trovata. Le texture float potrebbero avere limitazioni.');
+                }
+                this.gl.getExtension('OES_texture_float_linear');
+
+                this.config = {
+                    SIMULATION_SIZE: this.simulationSizeBase,
+                    WAVE_STRENGTH: 0.02, VISCOSITY: 0.98, REFRACTION_STRENGTH: 0.3, RAIN_INTENSITY: 0.0,
+                };
+                
+                try {
+                    this.config.WAVE_STRENGTH = parseFloat(document.getElementById('waveStrength').value) / 1000;
+                    this.config.VISCOSITY = parseFloat(document.getElementById('viscosity').value) / 1000;
+                    this.config.REFRACTION_STRENGTH = parseFloat(document.getElementById('refraction').value) / 100;
+                    this.config.RAIN_INTENSITY = parseFloat(document.getElementById('rainIntensity').value) / 100;
+                } catch (e) {
+                    console.error("Errore nel leggere i valori iniziali dei controlli:", e);
+                }
+
+
+                this.mouse = { x: 0.5, y: 0.5, vx: 0, vy: 0, pressed: false, id: -1 }; // Aggiunto id per multi-touch (anche se non usato pienamente qui)
+                this.prevMouse = { x: 0.5, y: 0.5 };
+                this.time = 0; this.frame = 0; this.programLocations = {};
+                this.rafId = null; // Per requestAnimationFrame
+
+                if (!this.init()) {
+                    this.handleCriticalError('Inizializzazione WebGL fallita. Controlla la console.');
+                    return;
+                }
+                this.setupEventListeners();
+                this.setupControlsToggle();
+            }
+            
+            handleCriticalError(message) {
+                const loadingEl = document.getElementById('loading');
+                if (loadingEl) loadingEl.textContent = message;
+                if (this.rafId) cancelAnimationFrame(this.rafId); // Ferma il loop di animazione
+                this.gl = null; // Indica che WebGL non è più utilizzabile
+                console.error(message);
+            }
+
+
+            init() {
+                if (!this.gl) return false;
+                const gl = this.gl;
+
+                this.simulationProgram = this.createProgram("simulationProgram", this.getSimulationVertexShader(), this.getSimulationFragmentShader());
+                // ... (gli altri program come prima) ...
+                this.renderProgram = this.createProgram("renderProgram", this.getRenderVertexShader(), this.getRenderFragmentShader());
+                this.normalProgram = this.createProgram("normalProgram", this.getSimulationVertexShader(), this.getNormalFragmentShader());
+                this.causticsProgram = this.createProgram("causticsProgram", this.getSimulationVertexShader(), this.getCausticsFragmentShader());
+
+                if (!this.simulationProgram || !this.renderProgram || !this.normalProgram || !this.causticsProgram) return false;
+
+                this.quadBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+
+                this.textures = {
+                    prev: this.createTexture(this.config.SIMULATION_SIZE), curr: this.createTexture(this.config.SIMULATION_SIZE),
+                    normal: this.createTexture(this.config.SIMULATION_SIZE),
+                    caustics: this.createTexture(this.config.SIMULATION_SIZE, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE)
+                };
+                
+                this.framebuffers = {
+                    prev: this.createFramebuffer(this.textures.prev), curr: this.createFramebuffer(this.textures.curr),
+                    normal: this.createFramebuffer(this.textures.normal), caustics: this.createFramebuffer(this.textures.caustics)
+                };
+
+                if (!this.framebuffers.prev || !this.framebuffers.curr || !this.framebuffers.normal || !this.framebuffers.caustics) return false;
+                
+                this.resize();
+                const loadingEl = document.getElementById('loading');
+                if (loadingEl) loadingEl.style.display = 'none';
+                return true;
+            }
+
+            // --- SHADERS (invariati rispetto alla versione precedente, per brevità omessi qui, ma presenti nel file completo) ---
+            getSimulationVertexShader() { return `#version 300 es
+                in vec2 position; out vec2 vUv; void main() { vUv = position*0.5+0.5; gl_Position = vec4(position,0.,1.); }`; }
+            getSimulationFragmentShader() { return `#version 300 es
+                precision highp float; in vec2 vUv; out vec4 fragColor;
+                uniform sampler2D uPrevious; uniform vec2 uMouse; uniform vec2 uMouseVelocity; uniform bool uMousePressed;
+                uniform float uTime; uniform float uDeltaTime; uniform float uFrame;
+                uniform float uWaveStrength; uniform float uViscosity; uniform float uRainIntensity;
+                vec4 s(vec2 uv){return texture(uPrevious,uv);} float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+                void main(){ vec2 texel=1./vec2(textureSize(uPrevious,0)); vec4 c=s(vUv); float height=c.r; float vel=c.g;
+                float L=s(vUv-vec2(texel.x,0)).r; float R=s(vUv+vec2(texel.x,0)).r; float T=s(vUv-vec2(0,texel.y)).r; float B=s(vUv+vec2(0,texel.y)).r;
+                float lap=(L+R+T+B-4.*height); vel+=lap*0.5; vel*=uViscosity;
+                float mD=distance(vUv,uMouse); if(mD<0.05){float inf=smoothstep(0.05,0.,mD);float F=inf*uWaveStrength;if(uMousePressed)vel+=F*0.5;else vel+=F*length(uMouseVelocity)*20.;}
+                if(uRainIntensity>0.){float rD=h(vUv+uTime*0.001*(h(vUv)-0.5));float thr=0.999-uRainIntensity*0.018;if(rD>thr){float dS=(rD-thr)/(1.-thr);dS=pow(dS,2.);vel-=dS*0.015*(0.5+uRainIntensity);}}
+                if(uFrame>60.&&uWaveStrength<0.01&&uRainIntensity<0.1){float amb=sin(uTime*1.+vUv.x*30.+vUv.y*10.)*0.0001+cos(uTime*0.7+vUv.y*25.-vUv.x*15.)*0.0001;vel+=amb;}
+                height+=vel*uDeltaTime; float edge=0.01; if(vUv.x<edge||vUv.x>1.-edge||vUv.y<edge||vUv.y>1.-edge){height*=0.9;vel*=-0.3;}
+                float p=clamp(lap*0.1+0.5,0.,1.); float f=clamp(abs(vel)*5.-0.1,0.,1.); f*=smoothstep(0.,0.05,abs(lap));
+                fragColor=vec4(height,vel,p,f);}`; }
+            getNormalFragmentShader() { return `#version 300 es
+                precision mediump float; in vec2 vUv; out vec4 fragColor; uniform sampler2D uHeightMap; const float N_FLAT=0.1;
+                vec3 cN(sampler2D t,vec2 uv){vec2 tx=1./vec2(textureSize(t,0)); float hl=texture(t,uv-vec2(tx.x,0)).r;float hr=texture(t,uv+vec2(tx.x,0)).r;float hd=texture(t,uv-vec2(0,tx.y)).r;float hu=texture(t,uv+vec2(0,tx.y)).r;
+                vec3 n=normalize(vec3(-(hr-hl)/(2.*tx.x),-(hu-hd)/(2.*tx.y),N_FLAT)); return n;}
+                void main(){vec3 norm=cN(uHeightMap,vUv); fragColor=vec4(norm*0.5+0.5,1.);}`; }
+            getCausticsFragmentShader() { return `#version 300 es
+                precision mediump float; in vec2 vUv; out vec4 fragColor; uniform sampler2D uNormalMap; uniform float uTime;
+                float h(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+                float n(vec2 p){vec2 i=floor(p);vec2 f=fract(p);f=f*f*(3.-2.*f); return mix(mix(h(i+vec2(0,0)),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
+                void main(){vec3 norm=texture(uNormalMap,vUv).rgb*2.-1.; vec2 rUv=vUv+norm.xy*0.05; float ca=0.;float sc=8.;
+                ca+=n(rUv*sc+uTime*0.1)*0.6; ca+=n(rUv*sc*2.+norm.xy*0.5-uTime*0.07)*0.4; ca=smoothstep(0.3,0.7,ca); ca=pow(ca,1.5);
+                fragColor=vec4(vec3(ca),1.);}`; }
+            getRenderVertexShader() { return `#version 300 es
+                in vec2 position; out vec2 vUv; void main(){vUv=position*0.5+0.5;gl_Position=vec4(position,0.,1.);}`; }
+            getRenderFragmentShader() { return `#version 300 es
+                precision highp float; in vec2 vUv; out vec4 fragColor;
+                uniform sampler2D uHeightMap; uniform sampler2D uNormalMap; uniform sampler2D uCausticsMap;
+                uniform float uTime; uniform float uRefractionStrength;
+                vec3 WCD=vec3(0,0.08,0.2); vec3 WCS=vec3(0.1,0.25,0.45); vec3 FC=vec3(0.9,0.95,1.); vec3 SC=vec3(0.9,0.9,1.);
+                float hbg(vec2 p){return fract(sin(dot(p,vec2(45.9898,98.233)))*33758.5453);}
+                float nbg(vec2 p){vec2 i=floor(p);vec2 f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hbg(i+vec2(0,0)),hbg(i+vec2(1,0)),f.x),mix(hbg(i+vec2(0,1)),hbg(i+vec2(1,1)),f.x),f.y);}
+                vec3 getBG(vec2 uv){vec2 fUv=fract(uv*vec2(2.,1.));float n=nbg(fUv*8.+uTime*0.02);n=pow(n,1.5);
+                float rip=sin(fUv.x*30.+n*5.-uTime*0.1)*0.5+0.5;rip=smoothstep(0.4,0.6,rip)*0.2;
+                vec3 sC1=vec3(0.15,0.12,0.08);vec3 sC2=vec3(0.25,0.2,0.12);vec3 bS=mix(sC1,sC2,n);bS=mix(bS,sC2,rip);
+                float dV=nbg(uv*0.5+uTime*0.01);bS*=(0.8+dV*0.2); return clamp(bS,0.,1.);}
+                void main(){vec4 hD=texture(uHeightMap,vUv);float h=hD.r;float foam=hD.a;vec3 norm=normalize(texture(uNormalMap,vUv).rgb*2.-1.);float ca=texture(uCausticsMap,vUv).r;
+                vec2 rUv=vUv+norm.xy*uRefractionStrength*0.05*(1.-h*0.5);vec3 bgC=getBG(rUv);
+                vec3 bW=mix(WCD,WCS,smoothstep(-0.1,0.1,h)*0.5+0.5);
+                vec3 lD=normalize(vec3(0.5,0.8,0.5));vec3 vD=normalize(vec3(0,0,1.));float diff=max(0.,dot(norm,lD));vec3 hlf=normalize(lD+vD);float spec=pow(max(0.,dot(norm,hlf)),64.);float fr=pow(1.-max(0.,dot(norm,vD)),3.);
+                vec3 col=bgC;float transp=smoothstep(0.,0.2,h+0.1)*0.7+0.2;col=mix(col,bW,transp);
+                col+=bW*diff*0.7;col+=SC*spec*0.9;col=mix(col,SC,fr*0.6);
+                col+=ca*vec3(0.4,0.6,0.9)*0.4*(1.-transp*0.8);
+                col=mix(col,FC,foam*0.85);
+                float vig=1.-smoothstep(0.7,1.,length(vUv-0.5))*0.3;col*=vig;
+                fragColor=vec4(col,1.);}`; }
+
+            // --- UTILITY METHODS (createShader, createProgram, createTexture, createFramebuffer - invariati) ---
+            createShader(type, source, programNameForError = '') {
+                if (!this.gl) return null; const gl = this.gl; const shader = gl.createShader(type);
+                gl.shaderSource(shader, source); gl.compileShader(shader);
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    console.error(`Shader Err (${type === gl.VERTEX_SHADER?"V":"F"}): ${programNameForError}\n${gl.getShaderInfoLog(shader)}`);
+                    gl.deleteShader(shader); return null;
+                } return shader;
+            }
+            createProgram(programName, vertexSource, fragmentSource) {
+                if (!this.gl) return null; const gl = this.gl;
+                const vertexShader = this.createShader(gl.VERTEX_SHADER, vertexSource, programName);
+                const fragmentShader = this.createShader(gl.FRAGMENT_SHADER, fragmentSource, programName);
+                if (!vertexShader || !fragmentShader) return null;
+                const program = gl.createProgram();
+                gl.attachShader(program, vertexShader); gl.attachShader(program, fragmentShader); gl.linkProgram(program);
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    console.error(`Link Err '${programName}': ${gl.getProgramInfoLog(program)}`);
+                    gl.deleteProgram(program); gl.deleteShader(vertexShader); gl.deleteShader(fragmentShader); return null;
+                }
+                this.programLocations[programName] = { attributes: {}, uniforms: {} };
+                const numAttributes = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
+                for (let i = 0; i < numAttributes; i++) { const attr = gl.getActiveAttrib(program, i); if (attr) this.programLocations[programName].attributes[attr.name] = gl.getAttribLocation(program, attr.name); }
+                const numUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+                for (let i = 0; i < numUniforms; i++) { const unif = gl.getActiveUniform(program, i); if (unif) this.programLocations[programName].uniforms[unif.name] = gl.getUniformLocation(program, unif.name); }
+                gl.detachShader(program, vertexShader); gl.detachShader(program, fragmentShader);
+                gl.deleteShader(vertexShader); gl.deleteShader(fragmentShader); return program;
+            }
+            createTexture(size, internalFormat = this.gl.RGBA32F, format = this.gl.RGBA, type = this.gl.FLOAT) {
+                if (!this.gl) return null; const gl = this.gl; const texture = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, size, size, 0, format, type, null);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                gl.bindTexture(gl.TEXTURE_2D, null); return texture;
+            }
+            createFramebuffer(texture) {
+                if (!this.gl) return null; const gl = this.gl; const framebuffer = gl.createFramebuffer();
+                gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+                const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+                if (status !== gl.FRAMEBUFFER_COMPLETE) {
+                    console.error(`FBO Incomplete: 0x${status.toString(16)}`, texture);
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.deleteFramebuffer(framebuffer); return null;
+                }
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null); return framebuffer;
+            }
+
+            setupControlsToggle() {
+                const toggleButton = document.getElementById('controlsToggle');
+                const controlsPanel = document.getElementById('controlsPanel');
+                if (toggleButton && controlsPanel) {
+                    toggleButton.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Impedisce che il click si propaghi al canvas
+                        const isVisible = controlsPanel.classList.toggle('visible');
+                        toggleButton.classList.toggle('active', isVisible);
+                        toggleButton.setAttribute('aria-expanded', isVisible.toString());
+                    });
+                     // Chiudi il pannello se si clicca fuori (sul canvas)
+                    this.canvas.addEventListener('click', () => {
+                        if (controlsPanel.classList.contains('visible')) {
+                            controlsPanel.classList.remove('visible');
+                            toggleButton.classList.remove('active');
+                            toggleButton.setAttribute('aria-expanded', 'false');
+                        }
+                    });
+                    // Impedisci che i click sul pannello lo chiudano
+                    controlsPanel.addEventListener('click', (e) => e.stopPropagation());
+                }
+            }
+
+            // Rinominato setupEvents in setupEventListeners per chiarezza
+            setupEventListeners() {
+                const canvas = this.canvas;
+
+                const updateMouseFromEvent = (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    let clientX, clientY;
+
+                    if (e.changedTouches && e.changedTouches.length > 0) { // Usa changedTouches per touchend/touchcancel
+                        clientX = e.changedTouches[0].clientX;
+                        clientY = e.changedTouches[0].clientY;
+                    } else if (e.touches && e.touches.length > 0) { // Per touchstart/touchmove
+                        clientX = e.touches[0].clientX;
+                        clientY = e.touches[0].clientY;
+                    } else { // Per mouse events
+                        clientX = e.clientX;
+                        clientY = e.clientY;
+                    }
+                    this.mouse.x = clientX / rect.width;
+                    this.mouse.y = 1.0 - clientY / rect.height; // Y invertita
+                };
+
+                // MOUSE
+                canvas.addEventListener('mousedown', (e) => { updateMouseFromEvent(e); this.mouse.pressed = true; });
+                canvas.addEventListener('mousemove', (e) => { if(this.mouse.pressed) updateMouseFromEvent(e); }); // Aggiorna solo se premuto
+                canvas.addEventListener('mouseup', (e) => { updateMouseFromEvent(e); this.mouse.pressed = false; });
+                canvas.addEventListener('mouseleave', (e) => { this.mouse.pressed = false; });
+                // CLICK è separato per triggerWave specifico
+                canvas.addEventListener('click', (e) => { 
+                    // Non triggerare l'onda se il click proviene dall'apertura/chiusura del pannello
+                    if (document.getElementById('controlsPanel').contains(e.target) || document.getElementById('controlsToggle').contains(e.target)) {
+                        return;
+                    }
+                    updateMouseFromEvent(e); // Assicura che la posizione del mouse sia aggiornata per il click
+                    this.triggerWave(); 
+                });
+
+
+                // TOUCH
+                // Usiamo pointer events se disponibili, altrimenti fallback su touch events
+                if (window.PointerEvent) {
+                    canvas.addEventListener('pointerdown', (e) => {
+                        if (e.pointerType === 'mouse' && e.button !== 0) return; // Solo tasto sinistro mouse
+                        e.preventDefault(); // Fondamentale per prevenire comportamenti di default
+                        canvas.setPointerCapture(e.pointerId); // Cattura il puntatore
+                        updateMouseFromEvent(e);
+                        this.mouse.pressed = true;
+                        this.mouse.id = e.pointerId;
+                        if (e.pointerType === 'touch') this.triggerWave(); // Onde al primo tocco
+                    }, { passive: false });
+
+                    canvas.addEventListener('pointermove', (e) => {
+                        if (this.mouse.pressed && e.pointerId === this.mouse.id) {
+                            e.preventDefault();
+                            updateMouseFromEvent(e);
+                        }
+                    }, { passive: false });
+
+                    canvas.addEventListener('pointerup', (e) => {
+                        if (e.pointerId === this.mouse.id) {
+                            e.preventDefault();
+                            this.mouse.pressed = false;
+                            this.mouse.id = -1;
+                            // Non triggerare onda qui, 'click' o 'pointerdown' lo gestiscono
+                        }
+                    }, { passive: false });
+
+                    canvas.addEventListener('pointercancel', (e) => {
+                         if (e.pointerId === this.mouse.id) {
+                            this.mouse.pressed = false;
+                            this.mouse.id = -1;
+                        }
+                    }, { passive: false });
+
+                } else { // Fallback a touch events
+                    canvas.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        updateMouseFromEvent(e);
+                        this.mouse.pressed = true;
+                        this.triggerWave(); // Onde al primo tocco
+                    }, { passive: false });
+
+                    canvas.addEventListener('touchmove', (e) => {
+                        e.preventDefault();
+                        if (this.mouse.pressed) updateMouseFromEvent(e);
+                    }, { passive: false });
+
+                    canvas.addEventListener('touchend', (e) => {
+                        // e.preventDefault(); // Spesso non necessario per touchend
+                        this.mouse.pressed = false;
+                    }, { passive: false });
+                    canvas.addEventListener('touchcancel', (e) => {
+                        this.mouse.pressed = false;
+                    }, { passive: false });
+                }
+
+
+                window.addEventListener('resize', () => this.resize());
+
+                // Controlli UI
+                document.getElementById('waveStrength').addEventListener('input', (e) => this.config.WAVE_STRENGTH = parseFloat(e.target.value) / 1000.0);
+                document.getElementById('viscosity').addEventListener('input', (e) => this.config.VISCOSITY = parseFloat(e.target.value) / 1000.0);
+                document.getElementById('refraction').addEventListener('input', (e) => this.config.REFRACTION_STRENGTH = parseFloat(e.target.value) / 100.0);
+                document.getElementById('rainIntensity').addEventListener('input', (e) => this.config.RAIN_INTENSITY = parseFloat(e.target.value) / 100.0);
+            }
+            
+            triggerWave() {
+                if (!this.gl) return;
+                const currentSliderStrength = parseFloat(document.getElementById('waveStrength').value) / 1000.0;
+                this.config.WAVE_STRENGTH = Math.max(currentSliderStrength, 0.05); 
+                setTimeout(() => {
+                    if (!this.gl) return; // Controlla di nuovo se nel frattempo l'app è stata distrutta
+                    this.config.WAVE_STRENGTH = parseFloat(document.getElementById('waveStrength').value) / 1000.0;
+                }, 150);
+            }
+
+            resize() {
+                if (!this.gl) return;
+                const gl = this.gl; const canvas = this.canvas;
+                const displayWidth = canvas.clientWidth; const displayHeight = canvas.clientHeight;
+                // Usiamo devicePixelRatio per rendering più nitido su schermi HiDPI
+                const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+                const newWidth = Math.round(displayWidth * pixelRatio);
+                const newHeight = Math.round(displayHeight * pixelRatio);
+
+                if (canvas.width !== newWidth || canvas.height !== newHeight) {
+                    canvas.width = newWidth; canvas.height = newHeight;
+                    gl.viewport(0, 0, canvas.width, canvas.height);
+                }
+            }
+
+            simulate(deltaTime) {
+                if (!this.gl) return; const gl = this.gl;
+                gl.viewport(0, 0, this.config.SIMULATION_SIZE, this.config.SIMULATION_SIZE);
+                this.mouse.vx = (this.mouse.x - this.prevMouse.x) * 0.5; // Smorza un po' la velocità per stabilità
+                this.mouse.vy = (this.mouse.y - this.prevMouse.y) * 0.5;
+
+                gl.useProgram(this.simulationProgram); gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers.curr);
+                gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.textures.prev);
+                this.setUniforms("simulationProgram", {
+                    uPrevious:0, uMouse:[this.mouse.x,this.mouse.y], uMouseVelocity:[this.mouse.vx,this.mouse.vy],
+                    uMousePressed:this.mouse.pressed, uTime:this.time, uDeltaTime:deltaTime, uFrame:this.frame,
+                    uWaveStrength:this.config.WAVE_STRENGTH, uViscosity:this.config.VISCOSITY,
+                    uRainIntensity:this.config.RAIN_INTENSITY
+                });
+                this.drawQuad("simulationProgram");
+
+                gl.useProgram(this.normalProgram); gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers.normal);
+                gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.textures.curr);
+                this.setUniforms("normalProgram", { uHeightMap: 0 }); this.drawQuad("normalProgram");
+
+                gl.useProgram(this.causticsProgram); gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers.caustics);
+                gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.textures.normal);
+                this.setUniforms("causticsProgram", { uNormalMap: 0, uTime: this.time }); this.drawQuad("causticsProgram");
+
+                [this.textures.prev, this.textures.curr] = [this.textures.curr, this.textures.prev];
+                [this.framebuffers.prev, this.framebuffers.curr] = [this.framebuffers.curr, this.framebuffers.prev];
+                this.prevMouse.x = this.mouse.x; this.prevMouse.y = this.mouse.y;
+            }
+
+            render() {
+                if (!this.gl) return; const gl = this.gl;
+                gl.viewport(0, 0, gl.canvas.width, gl.canvas.height); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);
+
+                gl.useProgram(this.renderProgram);
+                gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.textures.prev);
+                gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.textures.normal);
+                gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.textures.caustics);
+                this.setUniforms("renderProgram", {
+                    uHeightMap:0, uNormalMap:1, uCausticsMap:2, uTime:this.time, uRefractionStrength:this.config.REFRACTION_STRENGTH
+                });
+                this.drawQuad("renderProgram");
+            }
+
+            setUniforms(programName, uniforms) {
+                if (!this.gl) return; const gl = this.gl;
+                if (!this.programLocations[programName] || !this.programLocations[programName].uniforms) { return; }
+                const locations = this.programLocations[programName].uniforms;
+                for (const [name, value] of Object.entries(uniforms)) {
+                    const loc = locations[name]; if (loc === null || loc === undefined || loc === -1) { continue; }
+                    const isSampler = name.toLowerCase().includes("sampler") || name.toLowerCase().includes("map") || name.toLowerCase().includes("texture") || name.toLowerCase().includes("previous");
+                    if (isSampler && Number.isInteger(value)) gl.uniform1i(loc, value);
+                    else if (typeof value === 'boolean') gl.uniform1i(loc, value ? 1 : 0);
+                    else if (typeof value === 'number') gl.uniform1f(loc, value);
+                    else if (Array.isArray(value)) { if (value.length === 2) gl.uniform2fv(loc, value); else if (value.length === 3) gl.uniform3fv(loc, value); else if (value.length === 4) gl.uniform4fv(loc, value); }
+                }
+            }
+            drawQuad(programName) {
+                if (!this.gl) return; const gl = this.gl;
+                if (!this.programLocations[programName] || !this.programLocations[programName].attributes) { return; }
+                const posLoc = this.programLocations[programName].attributes['position'];
+                if (posLoc === undefined || posLoc < 0) { return; }
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer); gl.enableVertexAttribArray(posLoc);
+                gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0); gl.drawArrays(gl.TRIANGLES, 0, 6);
+            }
+
+            animate() {
+                if (!this.gl) return; 
+                // Calcola deltaTime dinamicamente per un'animazione più fluida se il frame rate varia
+                // Tuttavia, per la stabilità della simulazione fisica, un deltaTime fisso è spesso preferibile.
+                // Scegliamo un compromesso: usiamo deltaTime fisso ma se il browser è molto lento,
+                // questo potrebbe portare a una simulazione "rallentata" invece che a salti.
+                const deltaTime = 1 / 60.0; 
+                this.time += deltaTime; this.frame++;
+                this.simulate(deltaTime); this.render();
+                this.rafId = requestAnimationFrame(() => this.animate());
+            }
+            
+            destroy() { // Metodo per pulire quando l'effetto non è più necessario
+                if (this.rafId) {
+                    cancelAnimationFrame(this.rafId);
+                    this.rafId = null;
+                }
+                if (this.gl) {
+                    // Cancella buffer, texture, framebuffer, programmi
+                    if (this.quadBuffer) this.gl.deleteBuffer(this.quadBuffer);
+                    Object.values(this.textures).forEach(tex => { if (tex) this.gl.deleteTexture(tex); });
+                    Object.values(this.framebuffers).forEach(fb => { if (fb) this.gl.deleteFramebuffer(fb); });
+                    if (this.simulationProgram) this.gl.deleteProgram(this.simulationProgram);
+                    if (this.renderProgram) this.gl.deleteProgram(this.renderProgram);
+                    if (this.normalProgram) this.gl.deleteProgram(this.normalProgram);
+                    if (this.causticsProgram) this.gl.deleteProgram(this.causticsProgram);
+                    
+                    // Rimuovi event listeners (importante per evitare memory leak)
+                    // Questo è un esempio, dovresti tracciare e rimuovere specificamente quelli aggiunti
+                    window.removeEventListener('resize', this.resize); 
+                    // ...rimuovi altri listeners del canvas e dei controlli
+                    
+                    this.gl = null; // Segnala che non è più utilizzabile
+                    console.log("WaterSimulation destroyed.");
+                }
+            }
+        }
+
+        let waterSimInstance = null; // Riferimento globale all'istanza
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('canvas');
+            if (!canvas) {
+                console.error("Canvas non trovato!");
+                const loadingEl = document.getElementById('loading');
+                if (loadingEl) loadingEl.textContent = 'Errore: Canvas mancante.';
+                return;
+            }
+            waterSimInstance = new WaterSimulation(canvas);
+            if (waterSimInstance && waterSimInstance.gl) { 
+                waterSimInstance.animate();
+            } else { 
+                // L'errore dovrebbe essere già stato gestito da handleCriticalError
+            }
+        });
+        
+        // Opzionale: gestisci la distruzione se la pagina viene scaricata
+        // window.addEventListener('beforeunload', () => {
+        //     if (waterSimInstance) {
+        //         waterSimInstance.destroy();
+        //     }
+        // });
+
+    </script>
+</body>
+</html>
